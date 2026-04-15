@@ -409,6 +409,12 @@ async function main() {
     } catch (e: any) {
       const completedAt = new Date().toISOString();
       const errorMessage = e.message || String(e);
+      // Don't overwrite if job was cancelled while we were executing
+      const currentStateOnError = readJobFile(workingDir, jobId);
+      if (currentStateOnError && currentStateOnError.status === "cancelled") {
+        if (logFile) appendLogLine(logFile, "Worker failed but job was cancelled, not updating state");
+        return;
+      }
       upsertJob(workingDir, { id: jobId, status: "failed", phase: "failed", completedAt, errorMessage, pid: null });
       const rec = readJobFile(workingDir, jobId);
       if (rec) writeJobFile(workingDir, jobId, { ...rec, status: "failed", phase: "failed", completedAt, errorMessage, pid: null });

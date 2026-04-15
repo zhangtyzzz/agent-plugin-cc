@@ -20,7 +20,7 @@ import { Router } from "./router.js";
 import { CodexAdapter } from "./adapters/codex.js";
 import { OpenCodeAdapter } from "./adapters/opencode.js";
 import { QoderAdapter } from "./adapters/qoder.js";
-import { generateJobId, upsertJob, listJobs, readJobFile, writeJobFile, appendLogLine, matchJobRef, resolveJobLogFile, } from "./state.js";
+import { generateJobId, upsertJob, listJobs, readJobFile, writeJobFile, appendLogLine, matchJobRef, isAmbiguousJobRef, resolveJobLogFile, } from "./state.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 // -- Parse command line args --
@@ -95,11 +95,26 @@ function formatStatusTable(jobs) {
 }
 function timeSince(iso) {
     const ms = Date.now() - new Date(iso).getTime();
+    if (!Number.isFinite(ms) || ms < 0)
+        return "just now";
     if (ms < 60_000)
         return `${Math.floor(ms / 1000)}s ago`;
     if (ms < 3_600_000)
         return `${Math.floor(ms / 60_000)}m ago`;
     return `${Math.floor(ms / 3_600_000)}h ago`;
+}
+/** Look up a job by ID or prefix, exit with appropriate error if not found. */
+function resolveJobOrExit(jobs, ref) {
+    const job = matchJobRef(jobs, ref);
+    if (job)
+        return job;
+    if (isAmbiguousJobRef(jobs, ref)) {
+        console.error(`Error: job prefix "${ref}" is ambiguous — matches multiple jobs. Use a longer prefix.`);
+    }
+    else {
+        console.error(`Error: job "${ref}" not found.`);
+    }
+    process.exit(1);
 }
 function terminateProcessTree(pid) {
     // Verify the process still exists before killing
@@ -182,14 +197,10 @@ async function main() {
         const jobId = str("job-id");
         const jobs = listJobs(workingDir);
         if (jobId) {
-            const job = matchJobRef(jobs, jobId);
-            if (!job) {
-                console.error(`Error: job "${jobId}" not found.`);
-                process.exit(1);
-            }
+            const job = resolveJobOrExit(jobs, jobId);
             // --wait: poll until finished
             if (rawArgs.wait === true) {
-                const deadline = Date.now() + 4 * 60 * 1000; // 4min
+                const deadline = Date.now() + 6 * 60 * 1000; // 6min (must exceed adapter timeout)
                 let current = job;
                 while (current && (current.status === "queued" || current.status === "running")) {
                     if (Date.now() > deadline) {
@@ -252,11 +263,7 @@ async function main() {
             process.exit(1);
         }
         const jobs = listJobs(workingDir);
-        const job = matchJobRef(jobs, jobId);
-        if (!job) {
-            console.error(`Error: job "${jobId}" not found.`);
-            process.exit(1);
-        }
+        const job = resolveJobOrExit(jobs, jobId);
         if (job.status === "queued" || job.status === "running") {
             console.error(`Job ${job.id} is still ${job.status}. Use /agent:status --job-id ${job.id} --wait to wait for completion.`);
             process.exit(1);
@@ -284,11 +291,7 @@ async function main() {
             process.exit(1);
         }
         const jobs = listJobs(workingDir);
-        const job = matchJobRef(jobs, jobId);
-        if (!job) {
-            console.error(`Error: job "${jobId}" not found.`);
-            process.exit(1);
-        }
+        const job = resolveJobOrExit(jobs, jobId);
         if (job.status !== "queued" && job.status !== "running") {
             console.error(`Job ${job.id} is already ${job.status}, cannot cancel.`);
             process.exit(1);
@@ -311,14 +314,23 @@ async function main() {
     if (task === "task-worker") {
         const jobId = str("job-id");
         if (!jobId) {
+            console.error("Error: --job-id is required for task-worker");
             process.exit(1);
         }
         const stored = readJobFile(workingDir, jobId);
         if (!stored || !stored.request) {
+            console.error(`Error: job file for "${jobId}" not found or has no request`);
             process.exit(1);
         }
         const request = stored.request;
         const logFile = stored.logFile;
+        // Check if job was cancelled before we started
+        const freshState = readJobFile(workingDir, jobId);
+        if (freshState && freshState.status === "cancelled") {
+            if (logFile)
+                appendLogLine(logFile, "Worker exiting: job was cancelled before start");
+            return;
+        }
         // Mark running
         const startedAt = new Date().toISOString();
         upsertJob(workingDir, { id: jobId, status: "running", phase: "running", startedAt, pid: process.pid });
@@ -350,6 +362,13 @@ async function main() {
             const output = await adapter.execute(taskInput);
             const completedAt = new Date().toISOString();
             const result = { agent: output.agent, model: output.model, result: output.result, latencyMs: output.latencyMs };
+            // Don't overwrite if job was cancelled while we were executing
+            const currentState = readJobFile(workingDir, jobId);
+            if (currentState && currentState.status === "cancelled") {
+                if (logFile)
+                    appendLogLine(logFile, "Worker finished but job was cancelled, not updating state");
+                return;
+            }
             upsertJob(workingDir, { id: jobId, status: "completed", phase: "done", completedAt, result, pid: null });
             const rec = readJobFile(workingDir, jobId);
             if (rec)
@@ -360,6 +379,13 @@ async function main() {
         catch (e) {
             const completedAt = new Date().toISOString();
             const errorMessage = e.message || String(e);
+            // Don't overwrite if job was cancelled while we were executing
+            const currentStateOnError = readJobFile(workingDir, jobId);
+            if (currentStateOnError && currentStateOnError.status === "cancelled") {
+                if (logFile)
+                    appendLogLine(logFile, "Worker failed but job was cancelled, not updating state");
+                return;
+            }
             upsertJob(workingDir, { id: jobId, status: "failed", phase: "failed", completedAt, errorMessage, pid: null });
             const rec = readJobFile(workingDir, jobId);
             if (rec)
@@ -413,6 +439,9 @@ async function main() {
         }
     }
     // ---- Background execution ----
+    if (rawArgs.background === true && task === "compare") {
+        console.error("Warning: --background is not supported for compare, running in foreground.");
+    }
     if (rawArgs.background === true && task !== "compare") {
         const jobId = generateJobId("task");
         const logFile = resolveJobLogFile(workingDir, jobId);

@@ -107,6 +107,8 @@ function main() {
         emitDecision({ decision: "block", reason });
         return;
     }
+    // Emit explicit allow for protocol clarity
+    emitDecision({ decision: "allow", reason: review.reason || "Stop-time review passed" });
     logNote(runningNote);
 }
 try {

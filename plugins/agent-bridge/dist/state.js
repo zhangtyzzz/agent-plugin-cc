@@ -3,7 +3,7 @@
 // Persistent per-workspace job state management.
 // State directory: ~/.universal-agent-bridge/state/<basename>-<hash16>/
 import { createHash, randomBytes } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, renameSync, } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, renameSync, unlinkSync, } from "node:fs";
 import { basename, join } from "node:path";
 import { homedir } from "node:os";
 const MAX_JOBS = 50;
@@ -109,10 +109,30 @@ export function upsertJob(cwd, patch) {
         };
         jobs.unshift(record);
     }
-    // Prune oldest beyond MAX_JOBS
+    // Prune oldest beyond MAX_JOBS and clean up files
     const sorted = jobs.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
     const pruned = sorted.slice(0, MAX_JOBS);
+    const removed = sorted.slice(MAX_JOBS);
     writeStateFile(stateDir, pruned);
+    // Clean up job files for pruned entries
+    for (const old of removed) {
+        try {
+            validateJobId(old.id);
+        }
+        catch {
+            continue;
+        }
+        const jobFile = join(stateDir, "jobs", `${old.id}.json`);
+        const logFileToRemove = join(stateDir, "jobs", `${old.id}.log`);
+        try {
+            unlinkSync(jobFile);
+        }
+        catch { }
+        try {
+            unlinkSync(logFileToRemove);
+        }
+        catch { }
+    }
     return record;
 }
 /** List all job summaries, newest first. */
@@ -146,7 +166,8 @@ export function appendLogLine(logFile, line) {
     const sanitized = line.replace(/[\r\n]/g, " ");
     appendFileSync(logFile, `[${ts}] ${sanitized}\n`, { encoding: "utf-8", mode: 0o600 });
 }
-/** Prefix-match a job ID reference against a list of jobs. */
+/** Prefix-match a job ID reference against a list of jobs.
+ *  Returns: { match, ambiguous } — ambiguous is true when multiple jobs match the prefix. */
 export function matchJobRef(jobs, ref) {
     // Exact match first
     const exact = jobs.find((j) => j.id === ref);
@@ -154,7 +175,16 @@ export function matchJobRef(jobs, ref) {
         return exact;
     // Prefix match
     const matches = jobs.filter((j) => j.id.startsWith(ref));
-    return matches.length === 1 ? matches[0] : undefined;
+    if (matches.length === 1)
+        return matches[0];
+    return undefined;
+}
+/** Check if a job ref is ambiguous (matches multiple jobs). */
+export function isAmbiguousJobRef(jobs, ref) {
+    const exact = jobs.find((j) => j.id === ref);
+    if (exact)
+        return false;
+    return jobs.filter((j) => j.id.startsWith(ref)).length > 1;
 }
 /** Read state-level config. */
 export function getConfig(cwd) {
