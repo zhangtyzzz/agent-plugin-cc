@@ -1,6 +1,5 @@
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
-import { parse as parseYaml } from "yaml";
 import { fileURLToPath } from "node:url";
 
 export interface AgentConfig {
@@ -57,31 +56,31 @@ function deepMerge(target: any, source: any): any {
   return result;
 }
 
-function loadYamlFile(path: string): any {
+function loadJsonFile(path: string): any {
   if (!existsSync(path)) return null;
   const content = readFileSync(path, "utf-8");
-  return parseYaml(content);
+  return JSON.parse(content);
 }
 
 export function loadConfig(): BridgeConfig {
-  // Plugin default config — __dirname is plugins/agent-bridge/scripts/
+  // Plugin default config — __dirname is plugins/agent-bridge/scripts/ (or dist/)
   // Project root is 3 levels up: scripts -> agent-bridge -> plugins -> root
   const projectRoot = resolve(__dirname, "..", "..", "..");
-  const defaultConfigPath = resolve(projectRoot, "config", "default-config.yaml");
+  const defaultConfigPath = resolve(projectRoot, "config", "default-config.json");
 
   // User-level config
   const homeDir = process.env.HOME || process.env.USERPROFILE || "";
-  const userConfigPath = resolve(homeDir, ".universal-agent-bridge", "config.yaml");
+  const userConfigPath = resolve(homeDir, ".universal-agent-bridge", "config.json");
 
   // Project-level config
   const cwd = process.cwd();
-  const projectConfigPath = resolve(cwd, ".universal-agent-bridge", "config.yaml");
+  const projectConfigPath = resolve(cwd, ".universal-agent-bridge", "config.json");
 
   // Load and merge: default < user < project
-  let config = loadYamlFile(defaultConfigPath) || {};
-  const userConfig = loadYamlFile(userConfigPath);
+  let config = loadJsonFile(defaultConfigPath) || {};
+  const userConfig = loadJsonFile(userConfigPath);
   if (userConfig) config = deepMerge(config, userConfig);
-  const projectConfig = loadYamlFile(projectConfigPath);
+  const projectConfig = loadJsonFile(projectConfigPath);
   if (projectConfig) config = deepMerge(config, projectConfig);
 
   // Ensure required fields exist

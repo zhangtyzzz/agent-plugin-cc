@@ -2,7 +2,7 @@
 description: Use an external agent to explain code
 argument-hint: '[--agent <name>] [--files <glob>]'
 disable-model-invocation: true
-allowed-tools: Bash(npx:*), Read, Glob, Grep
+allowed-tools: Bash(node:*), Read, Glob, Grep
 ---
 
 Use an external AI agent to explain code step by step.
@@ -15,7 +15,7 @@ Execution:
 2. Write to temp file
 3. Run:
    ```bash
-   npx tsx "${CLAUDE_PLUGIN_ROOT}/scripts/bridge.ts" --task explain --code-file /tmp/uab-explain-input.txt $ARGUMENTS
+   node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task explain --code-file /tmp/uab-explain-input.txt $ARGUMENTS
    ```
 4. Return the output verbatim.
 5. Clean up temp file.

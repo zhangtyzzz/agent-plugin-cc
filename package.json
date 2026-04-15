@@ -4,11 +4,10 @@
   "description": "Universal multi-CLI agent bridge for Claude Code",
   "type": "module",
   "scripts": {
-    "bridge": "npx tsx plugins/agent-bridge/scripts/bridge.ts",
-    "test": "npx tsx plugins/agent-bridge/scripts/bridge.ts --task health"
-  },
-  "dependencies": {
-    "yaml": "^2.6.0"
+    "build": "tsc",
+    "bridge": "node plugins/agent-bridge/dist/bridge.js",
+    "dev": "npx tsx plugins/agent-bridge/scripts/bridge.ts",
+    "test": "node --test tests/*.test.mjs"
   },
   "devDependencies": {
     "tsx": "^4.19.0",

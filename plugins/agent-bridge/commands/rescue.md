@@ -2,7 +2,7 @@
 description: Delegate investigation or fix request to an external AI agent
 argument-hint: '[--background|--wait] [--agent <name>] [what to investigate or fix]'
 context: fork
-allowed-tools: Bash(npx:*), AskUserQuestion
+allowed-tools: Bash(node:*), AskUserQuestion
 ---
 
 Route this request to the `agent-bridge:agent-rescue` subagent.
@@ -20,7 +20,7 @@ Execution mode:
 Operating rules:
 - Use exactly one `Bash` call to invoke:
   ```bash
-  npx tsx "${CLAUDE_PLUGIN_ROOT}/scripts/bridge.ts" --task rescue --code-file /tmp/uab-rescue-input.txt $ARGUMENTS
+  node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task rescue --code-file /tmp/uab-rescue-input.txt $ARGUMENTS
   ```
 - Return the stdout verbatim to the user.
 - Do not paraphrase, summarize, or add commentary.

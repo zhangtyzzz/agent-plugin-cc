@@ -1,13 +1,13 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "module": "NodeNext",
+    "moduleResolution": "nodenext",
     "strict": true,
     "esModuleInterop": true,
-    "outDir": "./dist",
-    "rootDir": ".",
-    "declaration": true,
+    "outDir": "./plugins/agent-bridge/dist",
+    "rootDir": "./plugins/agent-bridge/scripts",
+    "declaration": false,
     "resolveJsonModule": true,
     "skipLibCheck": true
   },

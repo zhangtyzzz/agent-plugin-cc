@@ -1,12 +1,12 @@
 ---
 description: Check whether external AI agents are ready and optionally toggle the review gate
 argument-hint: '[--enable-review-gate|--disable-review-gate] [--agent <name>]'
-allowed-tools: Bash(npx:*), Bash(npm:*), AskUserQuestion
+allowed-tools: Bash(node:*), AskUserQuestion
 ---
 
 Run:
 ```bash
-npx tsx "${CLAUDE_PLUGIN_ROOT}/scripts/bridge.ts" --task health
+node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task health
 ```
 
 If `--enable-review-gate` is specified, create the auto-review hook in `.claude/settings.json`:
@@ -16,7 +16,7 @@ If `--enable-review-gate` is specified, create the auto-review hook in `.claude/
     "Stop": [
       {
         "matcher": "",
-        "command": "npx tsx \"${CLAUDE_PLUGIN_ROOT}/scripts/bridge.ts\" --task review --code-file /tmp/uab-stop-review.txt",
+        "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/bridge.js\" --task review --code-file /tmp/uab-stop-review.txt",
         "timeout": 120000
       }
     ]

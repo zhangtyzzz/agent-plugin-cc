@@ -5,18 +5,14 @@ A Claude Code plugin that bridges multiple CLI coding agents (Codex, OpenCode, G
 
 ## Installation
 ```bash
-# In Claude Code:
-/plugin marketplace add ./universal-agent-bridge
-/plugin install agent-bridge@universal-agent-bridge
-/reload-plugins
-```
-
-Or clone and install manually:
-```bash
 git clone https://github.com/zhangtyzzz/agent-plugin-cc.git
 cd agent-plugin-cc
-npm install
+
+# In Claude Code:
+/install ./plugins/agent-bridge
 ```
+
+No `npm install` required — compiled JS is included in the repo.
 
 ## Slash Commands
 - `/agent:review` — Code review (auto-routes or `--agent codex`)
@@ -29,13 +25,14 @@ npm install
 - `/agent:setup` — Setup + enable/disable auto-review gate
 
 ## Configuration
-Edit `config/default-config.yaml` or create `~/.universal-agent-bridge/config.yaml`:
-```yaml
-agents:
-  qoder:
-    model: ultimate   # auto | efficient | ultimate | performance | lite
-  opencode:
-    model: anthropic/claude-sonnet-4  # or leave empty for default
+Edit `config/default-config.json` or create `~/.universal-agent-bridge/config.json`:
+```json
+{
+  "agents": {
+    "qoder": { "model": "ultimate" },
+    "opencode": { "model": "anthropic/claude-sonnet-4" }
+  }
+}
 ```
 
 ## Prerequisites

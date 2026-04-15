@@ -16,16 +16,14 @@ Claude Code 插件 — 将多个 CLI 编码 Agent 通过统一适配层桥接到
 ## 安装
 
 ```bash
-# 克隆并安装依赖
 git clone https://github.com/zhangtyzzz/agent-plugin-cc.git
 cd agent-plugin-cc
-npm install
 
 # 在 Claude Code 中安装插件
-/plugin marketplace add ./agent-plugin-cc
-/plugin install agent-bridge@universal-agent-bridge
-/reload-plugins
+/install ./plugins/agent-bridge
 ```
+
+无需 `npm install` — 编译后的 JS 已包含在仓库中。
 
 各 Agent CLI 安装方式：
 ```bash
@@ -52,37 +50,37 @@ npm install -g @anthropic-ai/gemini-cli # Gemini CLI
 
 ```bash
 # 健康检查
-npx tsx plugins/agent-bridge/scripts/bridge.ts --task health
+node plugins/agent-bridge/dist/bridge.js --task health
 
 # 列出 Agent
-npx tsx plugins/agent-bridge/scripts/bridge.ts --task list
+node plugins/agent-bridge/dist/bridge.js --task list
 
 # 自动路由审查
 echo "function add(a, b) { return a + b; }" > /tmp/code.txt
-npx tsx plugins/agent-bridge/scripts/bridge.ts \
+node plugins/agent-bridge/dist/bridge.js \
   --task review --code-file /tmp/code.txt
 
 # 指定 Agent 审查
-npx tsx plugins/agent-bridge/scripts/bridge.ts \
+node plugins/agent-bridge/dist/bridge.js \
   --task review --agent codex --code-file /tmp/code.txt
 
 # 对抗审查 + 聚焦安全
-npx tsx plugins/agent-bridge/scripts/bridge.ts \
+node plugins/agent-bridge/dist/bridge.js \
   --task adversarial-review --agent codex \
   --code-file /tmp/code.txt --focus security
 
 # 委派修复任务
-npx tsx plugins/agent-bridge/scripts/bridge.ts \
+node plugins/agent-bridge/dist/bridge.js \
   --task rescue --agent codex --code-file /tmp/code.txt \
   --context "函数不传参时崩溃"
 
 # 多 Agent 对比
-npx tsx plugins/agent-bridge/scripts/bridge.ts \
+node plugins/agent-bridge/dist/bridge.js \
   --task compare --agents codex,opencode,qoder \
   --code-file /tmp/code.txt
 
 # 生成代码
-npx tsx plugins/agent-bridge/scripts/bridge.ts \
+node plugins/agent-bridge/dist/bridge.js \
   --task generate --agent codex \
   --context "写一个暗色主题的 Hello World 网页"
 ```
@@ -91,38 +89,56 @@ npx tsx plugins/agent-bridge/scripts/bridge.ts \
 
 三层配置合并（优先级从高到低）：
 
-1. `.universal-agent-bridge/config.yaml` — 项目级
-2. `~/.universal-agent-bridge/config.yaml` — 用户级
-3. `config/default-config.yaml` — 内置默认
+1. `.universal-agent-bridge/config.json` — 项目级
+2. `~/.universal-agent-bridge/config.json` — 用户级
+3. `config/default-config.json` — 内置默认
 
 ### 配置示例
 
-```yaml
-bridge:
-  default_strategy: best_fit
-  cost_limit_usd_per_day: 5.00
-
-agents:
-  codex:
-    enabled: true
-    strengths: [security, edge-cases, deep-reasoning, typescript]
-    cost_per_1k: { input: 0.003, output: 0.012 }
-
-  opencode:
-    enabled: true
-    # model: anthropic/claude-sonnet-4  # 可选，不指定则用 opencode 默认
-
-  qoder:
-    enabled: true
-    model: ultimate  # auto | efficient | ultimate | performance | lite
-
-routing_rules:
-  - match: { task_type: review, language: python }
-    route_to: opencode
-    reason: "OpenCode 擅长 Python"
-
-fallback_chain: [codex, gemini, qoder]
+```json
+{
+  "bridge": {
+    "default_strategy": "best_fit",
+    "cost_limit_usd_per_day": 5.00
+  },
+  "agents": {
+    "codex": {
+      "enabled": true,
+      "strengths": ["security", "edge-cases", "deep-reasoning", "typescript"],
+      "cost_per_1k": { "input": 0.003, "output": 0.012 }
+    },
+    "opencode": {
+      "enabled": true
+    },
+    "qoder": {
+      "enabled": true,
+      "model": "ultimate"
+    }
+  },
+  "routing_rules": [
+    {
+      "match": { "task_type": "review", "language": "python" },
+      "route_to": "opencode",
+      "reason": "OpenCode 擅长 Python"
+    }
+  ],
+  "fallback_chain": ["codex", "gemini", "qoder"]
+}
 ```
+
+### QoderCLI 模型切换
+
+```json
+{
+  "agents": {
+    "qoder": {
+      "model": "ultimate"
+    }
+  }
+}
+```
+
+可选模型：`auto`、`efficient`、`ultimate`、`performance`、`lite`、`gmodel`、`kmodel`、`mmodel`、`q35model`、`qmodel`
 
 ## 自动审查门禁（Stop Hook）
 
@@ -161,14 +177,19 @@ plugins/agent-bridge/
 ├── commands/                     # Slash 命令 (/agent:*)
 ├── agents/                       # 子代理 (rescue, reviewer)
 ├── hooks/                        # Hook 定义 (审查门禁)
-└── scripts/                      # TypeScript 脚本
-    ├── bridge.ts                  # 主入口
-    ├── router.ts                  # 智能路由引擎
-    ├── config.ts                  # 三层 YAML 配置加载
-    └── adapters/                  # 各 Agent 适配器
-        ├── base.ts                # 抽象基类 + 重试 + 成本日志
-        ├── codex.ts               # OpenAI Codex
-        ├── opencode.ts            # OpenCode
-        ├── gemini.ts              # Gemini CLI
-        └── qoder.ts               # QoderCLI
+├── scripts/                      # TypeScript 源码
+│   ├── bridge.ts                  # 主入口
+│   ├── router.ts                  # 智能路由引擎
+│   ├── config.ts                  # 三层 JSON 配置加载
+│   └── adapters/                  # 各 Agent 适配器
+│       ├── base.ts                # 抽象基类 + 重试 + 成本日志
+│       ├── codex.ts               # OpenAI Codex
+│       ├── opencode.ts            # OpenCode
+│       ├── gemini.ts              # Gemini CLI
+│       └── qoder.ts               # QoderCLI
+└── dist/                          # 编译后的 JS（已提交到仓库）
+    ├── bridge.js
+    ├── router.js
+    ├── config.js
+    └── adapters/
 ```

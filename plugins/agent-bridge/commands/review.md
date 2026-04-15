@@ -2,7 +2,7 @@
 description: Run a code review using an external AI agent
 argument-hint: '[--wait|--background] [--base <ref>] [--agent <name>] [--focus <area>]'
 disable-model-invocation: true
-allowed-tools: Read, Glob, Grep, Bash(npx:*), Bash(git:*), AskUserQuestion
+allowed-tools: Read, Glob, Grep, Bash(node:*), Bash(git:*), AskUserQuestion
 ---
 
 Run a code review through the Universal Agent Bridge.
@@ -41,7 +41,7 @@ Foreground flow:
    ```
 2. Run:
    ```bash
-   npx tsx "${CLAUDE_PLUGIN_ROOT}/scripts/bridge.ts" --task review --code-file /tmp/uab-review-input.txt $ARGUMENTS
+   node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task review --code-file /tmp/uab-review-input.txt $ARGUMENTS
    ```
 3. Return the command stdout verbatim, exactly as-is.
 4. Do not paraphrase, summarize, or add commentary before or after it.
@@ -51,7 +51,7 @@ Background flow:
 - Launch the review with `Bash` in the background:
   ```typescript
   Bash({
-    command: `git diff main > /tmp/uab-review-input.txt && npx tsx "${CLAUDE_PLUGIN_ROOT}/scripts/bridge.ts" --task review --code-file /tmp/uab-review-input.txt $ARGUMENTS && rm -f /tmp/uab-review-input.txt`,
+    command: `git diff main > /tmp/uab-review-input.txt && node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task review --code-file /tmp/uab-review-input.txt $ARGUMENTS && rm -f /tmp/uab-review-input.txt`,
     description: "Agent review",
     run_in_background: true
   })

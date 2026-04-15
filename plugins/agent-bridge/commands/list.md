@@ -1,12 +1,12 @@
 ---
 description: List all available external AI agents and their status
 disable-model-invocation: true
-allowed-tools: Bash(npx:*)
+allowed-tools: Bash(node:*)
 ---
 
 Run:
 ```bash
-npx tsx "${CLAUDE_PLUGIN_ROOT}/scripts/bridge.ts" --task list
+node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task list
 ```
 
 Return the output verbatim.

@@ -2,7 +2,7 @@
 description: Run an adversarial code review that challenges implementation and finds vulnerabilities
 argument-hint: '[--wait|--background] [--base <ref>] [--agent <name>] [--focus <area>] [focus text ...]'
 disable-model-invocation: true
-allowed-tools: Read, Glob, Grep, Bash(npx:*), Bash(git:*), AskUserQuestion
+allowed-tools: Read, Glob, Grep, Bash(node:*), Bash(git:*), AskUserQuestion
 ---
 
 Run an adversarial code review through the Universal Agent Bridge.
@@ -35,7 +35,7 @@ Foreground flow:
    ```
 2. Run:
    ```bash
-   npx tsx "${CLAUDE_PLUGIN_ROOT}/scripts/bridge.ts" --task adversarial-review --code-file /tmp/uab-review-input.txt $ARGUMENTS
+   node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task adversarial-review --code-file /tmp/uab-review-input.txt $ARGUMENTS
    ```
 3. Return the command stdout verbatim.
 4. Clean up: `rm -f /tmp/uab-review-input.txt`

@@ -1,10 +1,10 @@
 // plugins/agent-bridge/scripts/bridge.ts
 //
-// Usage (from command markdown):
-//   !npx tsx <path>/bridge.ts --task review --agent codex --code-file /tmp/uab-input.txt
-//   !npx tsx <path>/bridge.ts --task health
-//   !npx tsx <path>/bridge.ts --task list
-//   !npx tsx <path>/bridge.ts --task compare --agents codex,gemini --code-file /tmp/code.txt
+// Usage:
+//   node <path>/dist/bridge.mjs --task review --agent codex --code-file /tmp/uab-input.txt
+//   node <path>/dist/bridge.mjs --task health
+//   node <path>/dist/bridge.mjs --task list
+//   node <path>/dist/bridge.mjs --task compare --agents codex,gemini --code-file /tmp/code.txt
 
 import { parseArgs } from "node:util";
 import { readFileSync, existsSync } from "node:fs";
@@ -19,21 +19,27 @@ import { QoderAdapter } from "./adapters/qoder.js";
 import type { BaseAdapter, TaskInput, TaskOutput } from "./adapters/base.js";
 
 // -- Parse command line args --
-const { values: args } = parseArgs({
+const { values: rawArgs } = parseArgs({
   options: {
-    task:        { type: "string", short: "t" },  // review|adversarial-review|rescue|explain|generate|health|list|compare
-    agent:       { type: "string", short: "a" },  // specify agent name (optional)
-    agents:      { type: "string" },               // compare mode: comma-separated
-    "code-file": { type: "string", short: "f" },  // code file path
-    focus:       { type: "string" },               // review focus
-    language:    { type: "string", short: "l" },  // programming language
-    context:     { type: "string", short: "c" },  // extra context
+    task:        { type: "string", short: "t" },
+    agent:       { type: "string", short: "a" },
+    agents:      { type: "string" },
+    "code-file": { type: "string", short: "f" },
+    focus:       { type: "string" },
+    language:    { type: "string", short: "l" },
+    context:     { type: "string", short: "c" },
     background:  { type: "boolean", short: "b", default: false },
-    base:        { type: "string" },               // diff base branch
+    base:        { type: "string" },
   },
   strict: false,
   allowPositionals: true,
 });
+
+// Helper: extract string args (parseArgs returns string | boolean for non-strict)
+const str = (key: string): string | undefined => {
+  const v = rawArgs[key];
+  return typeof v === "string" ? v : undefined;
+};
 
 // -- Initialize Adapter Registry --
 function createAdapterRegistry(config: BridgeConfig): Map<string, BaseAdapter> {
@@ -77,7 +83,7 @@ async function main() {
 
   const router = new Router(registry, routingRules, config.fallback_chain || []);
 
-  const task = args.task;
+  const task = str("task");
   if (!task) {
     console.error("Error: --task is required");
     process.exit(1);
@@ -86,11 +92,11 @@ async function main() {
   // ---- health command ----
   if (task === "health") {
     console.log("## Agent Health Check\n");
-    console.log("| Agent | Status | Version | Auth |");
+    console.log("| Agent | Status | Version | Info |");
     console.log("|-------|--------|---------|------|");
     for (const [name, adapter] of registry) {
       const health = await adapter.healthCheck();
-      const status = health.ok ? "✅ OK" : "❌ Fail";
+      const status = health.ok ? "OK" : "Fail";
       const version = health.version || "-";
       const error = health.error || "OK";
       console.log(`| ${name} | ${status} | ${version} | ${error} |`);
@@ -125,7 +131,7 @@ async function main() {
   }
 
   let code = "";
-  const codeFile = args["code-file"];
+  const codeFile = str("code-file");
   if (codeFile && existsSync(codeFile)) {
     code = readFileSync(codeFile, "utf-8");
   }
@@ -140,15 +146,16 @@ async function main() {
   const taskInput: TaskInput = {
     type: task as TaskInput["type"],
     code,
-    context: args.context || "",
-    focus: args.focus || "",
-    language: args.language || "",
-    background: args.background || false,
+    context: str("context") || "",
+    focus: str("focus") || "",
+    language: str("language") || "",
+    background: rawArgs.background === true,
   };
 
   // ---- compare command ----
   if (task === "compare") {
-    const agentNames = (args.agents || "").split(",").map(s => s.trim()).filter(Boolean);
+    const agentsArg = str("agents") || "";
+    const agentNames = agentsArg.split(",").map((s: string) => s.trim()).filter(Boolean);
     if (agentNames.length < 2) {
       console.error("Error: --agents requires at least 2 comma-separated agent names");
       process.exit(1);
@@ -156,9 +163,7 @@ async function main() {
 
     console.log(`## Comparison: ${agentNames.join(" vs ")}\n`);
 
-    const results: TaskOutput[] = [];
-    // Execute in parallel
-    const promises = agentNames.map(async (name) => {
+    const promises = agentNames.map(async (name: string) => {
       const adapter = registry.get(name);
       if (!adapter) {
         return { agent: name, result: `Error: agent "${name}" not found or not enabled`, latencyMs: 0 };
@@ -181,14 +186,13 @@ async function main() {
     return;
   }
 
-  // ---- Single agent execution (review, adversarial-review, rescue, explain, generate) ----
+  // ---- Single agent execution ----
   let agentName: string;
+  const specifiedAgent = str("agent");
 
-  if (args.agent) {
-    // User specified an agent
-    agentName = args.agent;
+  if (specifiedAgent) {
+    agentName = specifiedAgent;
   } else {
-    // Auto-route
     const routeResult = await router.select(taskInput);
     agentName = routeResult.agent;
     console.log(`*Auto-routed to **${agentName}**: ${routeResult.reason}*\n`);
@@ -203,7 +207,7 @@ async function main() {
 
   try {
     const output = await adapter.execute(taskInput);
-    console.log(`## ${task.replace("-", " ").replace(/\b\w/g, c => c.toUpperCase())}`);
+    console.log(`## ${task.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}`);
     console.log(`*Latency: ${output.latencyMs}ms${output.costEstimate ? ` | Est. cost: $${output.costEstimate}` : ""}*`);
     console.log(output.result);
   } catch (e: any) {
