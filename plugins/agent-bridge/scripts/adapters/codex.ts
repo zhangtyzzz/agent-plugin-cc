@@ -11,6 +11,13 @@ export class CodexAdapter extends BaseAdapter {
     costPer1kTokens: { input: 0.003, output: 0.012 },
   };
 
+  private model?: string;
+
+  constructor(cfg?: any) {
+    super();
+    if (cfg?.model) this.model = cfg.model;
+  }
+
   async healthCheck(): Promise<HealthResult> {
     try {
       const version = await this.runCli(this.config.cliBinary, ["--version"], 5000);
@@ -27,16 +34,19 @@ export class CodexAdapter extends BaseAdapter {
         ? "\n\nIMPORTANT: Only analyze and report findings. Do not modify any files."
         : "");
 
-    // codex exec --full-auto "<prompt>"
-    const args = ["exec", "--full-auto", "--skip-git-repo-check", prompt];
+    // codex exec --full-auto --skip-git-repo-check [--model <m>] <prompt>
+    const args = ["exec", "--full-auto", "--skip-git-repo-check"];
+    if (this.model) args.push("--model", this.model);
+    args.push(prompt);
     const result = await this.runCliWithRetry(this.config.cliBinary, args);
 
     const latencyMs = Date.now() - start;
-    this.logCost({ agent: "codex", task: task.type, latencyMs, model: "codex-1" });
+    const modelName = this.model || "codex-1";
+    this.logCost({ agent: "codex", task: task.type, latencyMs, model: modelName });
 
     return {
       agent: "codex",
-      model: "codex-1",
+      model: modelName,
       result,
       latencyMs,
     };

@@ -58,6 +58,6 @@ export function loadConfig() {
     if (!config.routing_rules)
         config.routing_rules = [];
     if (!config.fallback_chain)
-        config.fallback_chain = ["codex", "gemini", "qoder"];
+        config.fallback_chain = ["codex", "opencode", "qoder"];
     return config;
 }

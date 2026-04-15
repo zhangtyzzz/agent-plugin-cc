@@ -16,14 +16,26 @@ If `--enable-review-gate` is specified, create the auto-review hook in `.claude/
     "Stop": [
       {
         "matcher": "",
-        "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/bridge.js\" --task review --code-file /tmp/uab-stop-review.txt",
-        "timeout": 120000
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/stop-review-gate.js\"",
+            "timeout": 900
+          }
+        ]
       }
     ]
   }
 }
 ```
+Then enable the persistent state flag by running (from the project root, NOT from dist/):
+```bash
+node -e "import('${CLAUDE_PLUGIN_ROOT}/dist/state.js').then(m => m.setConfig(process.cwd(), 'stopReviewGate', true))" --input-type=module
+```
 
-If `--disable-review-gate` is specified, remove the Stop hook entry.
+If `--disable-review-gate` is specified, remove the Stop hook entry from `.claude/settings.json` and disable the state flag:
+```bash
+node -e "import('${CLAUDE_PLUGIN_ROOT}/dist/state.js').then(m => m.setConfig(process.cwd(), 'stopReviewGate', false))" --input-type=module
+```
 
 Present the health output to the user.

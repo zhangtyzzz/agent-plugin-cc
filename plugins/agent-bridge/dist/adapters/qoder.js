@@ -27,8 +27,8 @@ export class QoderAdapter extends BaseAdapter {
         const start = Date.now();
         const prompt = this.buildReviewPrompt(task) +
             "\n\nIMPORTANT: Only analyze and report findings. Do not modify any files.";
-        // qodercli -p "<prompt>" --yolo -f text [--model <level>]
-        const args = ["-p", prompt, "--yolo", "-f", "text"];
+        // qodercli -p "<prompt>" --yolo --output-format text [--model <level>]
+        const args = ["-p", prompt, "--yolo", "--output-format", "text"];
         if (this.modelLevel) {
             args.push("--model", this.modelLevel);
         }

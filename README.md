@@ -8,7 +8,6 @@ Claude Code 插件 — 将多个 CLI 编码 Agent 通过统一适配层桥接到
 |-------|-----|---------|
 | Codex | `codex` | 安全审计、边界条件、深度推理、TypeScript |
 | OpenCode | `opencode` | 多模型切换、Python、低成本、本地模型 |
-| Gemini | `gemini` | 搜索增强、免费额度、速度快、Google Cloud |
 | QoderCLI | `qodercli` | 数据分析、SQL、业务逻辑 |
 
 > 只需安装对应 CLI 并配好 API Key 即可使用，插件不检查 Key，由各 CLI 自行鉴权。
@@ -28,8 +27,7 @@ Claude Code 插件 — 将多个 CLI 编码 Agent 通过统一适配层桥接到
 ```bash
 npm install -g @openai/codex           # Codex
 brew install opencode                   # OpenCode
-npm install -g @anthropic-ai/gemini-cli # Gemini CLI
-# QoderCLI 见其官方文档
+# QoderCLI 见 https://docs.qoder.com/cli/using-cli
 ```
 
 ## 插件命令（Slash Commands）
@@ -44,6 +42,48 @@ npm install -g @anthropic-ai/gemini-cli # Gemini CLI
 | `/agent:list` | 列出可用 Agent |
 | `/agent:health` | 健康检查 |
 | `/agent:setup` | 配置 + 启用/禁用自动审查门禁 |
+| `/agent:status` | 查看后台任务状态 |
+| `/agent:result` | 查看已完成任务的输出 |
+| `/agent:cancel` | 取消正在运行的后台任务 |
+
+## 后台任务
+
+支持将审查等耗时任务放到后台执行：
+
+```bash
+# 提交后台审查任务
+/agent:review --background
+
+# 查看任务状态
+/agent:status
+
+# 查看指定任务详情（支持前缀匹配）
+/agent:status task-abc123
+
+# 等待任务完成
+/agent:status task-abc123 --wait
+
+# 查看完成任务的结果
+/agent:result task-abc123
+
+# 取消正在运行的任务
+/agent:cancel task-abc123
+```
+
+## 审查范围（--scope）
+
+`/agent:review` 和 `/agent:adversarial-review` 支持 `--scope` 参数控制审查范围：
+
+| Scope | 说明 |
+|-------|------|
+| `auto`（默认） | 有未提交修改时审查工作区，否则审查分支 diff |
+| `working-tree` | 仅审查 `git diff`（暂存 + 未暂存） |
+| `branch` | 审查 `git diff <base>...HEAD`（分支所有提交） |
+
+```bash
+/agent:review --scope working-tree --agent codex
+/agent:review --scope branch --base develop
+```
 
 ## 直接调用
 
@@ -63,25 +103,17 @@ node plugins/agent-bridge/dist/bridge.js \
 node plugins/agent-bridge/dist/bridge.js \
   --task review --agent codex --code-file /tmp/code.txt
 
-# 对抗审查 + 聚焦安全
-node plugins/agent-bridge/dist/bridge.js \
-  --task adversarial-review --agent codex \
-  --code-file /tmp/code.txt --focus security
-
-# 委派修复任务
-node plugins/agent-bridge/dist/bridge.js \
-  --task rescue --agent codex --code-file /tmp/code.txt \
-  --context "函数不传参时崩溃"
-
 # 多 Agent 对比
 node plugins/agent-bridge/dist/bridge.js \
   --task compare --agents codex,opencode,qoder \
   --code-file /tmp/code.txt
 
-# 生成代码
+# 后台提交
 node plugins/agent-bridge/dist/bridge.js \
-  --task generate --agent codex \
-  --context "写一个暗色主题的 Hello World 网页"
+  --task review --background --agent codex --code-file /tmp/code.txt
+
+# 查看状态
+node plugins/agent-bridge/dist/bridge.js --task status
 ```
 
 ## 配置
@@ -92,7 +124,45 @@ node plugins/agent-bridge/dist/bridge.js \
 2. `~/.universal-agent-bridge/config.json` — 用户级
 3. `config/default-config.json` — 内置默认
 
-### 配置示例
+### 模型配置
+
+每个 Agent 都可以通过 `model` 字段指定模型：
+
+```json
+{
+  "agents": {
+    "codex": {
+      "model": "o3"
+    },
+    "opencode": {
+      "model": "anthropic/claude-sonnet-4"
+    },
+    "qoder": {
+      "model": "ultimate"
+    }
+  }
+}
+```
+
+将以上内容保存到 `~/.universal-agent-bridge/config.json`（全局生效）或项目根目录 `.universal-agent-bridge/config.json`（仅当前项目生效）。
+
+#### 各 Agent 模型说明
+
+**Codex** — 传入 `--model` 参数给 `codex exec`：
+- `o3`、`o4-mini`、`codex-mini` 等（见 `codex exec --help`）
+
+**OpenCode** — 传入 `--model` 参数给 `opencode`：
+- `anthropic/claude-sonnet-4`、`openai/gpt-4o` 等（取决于 provider 配置）
+- 不指定则使用 OpenCode 默认模型
+
+**QoderCLI** — 传入 `--model` 参数给 `qodercli`：
+- `ultimate`（极致模型，**默认**）
+- `auto`（自动选择）
+- `efficient`（高效模型）
+- `performance`（性能模型）
+- `lite`（轻量模型）
+
+### 完整配置示例
 
 ```json
 {
@@ -103,6 +173,7 @@ node plugins/agent-bridge/dist/bridge.js \
   "agents": {
     "codex": {
       "enabled": true,
+      "model": "o3",
       "strengths": ["security", "edge-cases", "deep-reasoning", "typescript"],
       "cost_per_1k": { "input": 0.003, "output": 0.012 }
     },
@@ -121,23 +192,19 @@ node plugins/agent-bridge/dist/bridge.js \
       "reason": "OpenCode 擅长 Python"
     }
   ],
-  "fallback_chain": ["codex", "gemini", "qoder"]
+  "fallback_chain": ["codex", "opencode", "qoder"]
 }
 ```
 
-### QoderCLI 模型切换
+### 禁用某个 Agent
 
 ```json
 {
   "agents": {
-    "qoder": {
-      "model": "ultimate"
-    }
+    "opencode": { "enabled": false }
   }
 }
 ```
-
-可选模型：`auto`、`efficient`、`ultimate`、`performance`、`lite`、`gmodel`、`kmodel`、`mmodel`、`q35model`、`qmodel`
 
 ## 自动审查门禁（Stop Hook）
 
@@ -151,6 +218,8 @@ node plugins/agent-bridge/dist/bridge.js \
 ```
 /agent:setup --disable-review-gate
 ```
+
+门禁会在 Claude Code 结束前自动运行审查，如发现问题会阻止退出并给出理由。
 
 ## 路由机制
 
@@ -180,15 +249,12 @@ plugins/agent-bridge/
 │   ├── bridge.ts                  # 主入口
 │   ├── router.ts                  # 智能路由引擎
 │   ├── config.ts                  # 三层 JSON 配置加载
+│   ├── state.ts                   # 任务状态持久化管理
+│   ├── stop-review-gate.ts        # Stop 审查门禁 Hook
 │   └── adapters/                  # 各 Agent 适配器
 │       ├── base.ts                # 抽象基类 + 重试 + 成本日志
 │       ├── codex.ts               # OpenAI Codex
 │       ├── opencode.ts            # OpenCode
-│       ├── gemini.ts              # Gemini CLI
 │       └── qoder.ts               # QoderCLI
 └── dist/                          # 编译后的 JS（已提交到仓库）
-    ├── bridge.js
-    ├── router.js
-    ├── config.js
-    └── adapters/
 ```

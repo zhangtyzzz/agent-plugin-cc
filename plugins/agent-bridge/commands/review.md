@@ -1,6 +1,6 @@
 ---
 description: Run a code review using an external AI agent
-argument-hint: '[--wait|--background] [--base <ref>] [--agent <name>] [--focus <area>]'
+argument-hint: '[--wait|--background] [--base <ref>] [--agent <name>] [--focus <area>] [--scope auto|working-tree|branch]'
 disable-model-invocation: true
 allowed-tools: Read, Glob, Grep, Bash(node:*), Bash(git:*), AskUserQuestion
 ---
@@ -29,29 +29,39 @@ Execution mode rules:
   - `Run in background`
 
 Argument handling:
-- `--agent <name>`: Route to a specific agent (codex, opencode, gemini, qoder). If omitted, auto-route based on config.
+- `--agent <name>`: Route to a specific agent (codex, opencode, qoder). If omitted, auto-route based on config.
 - `--base <ref>`: Diff base branch (default: main)
 - `--focus <area>`: Focus area (security, performance, logic, style)
+- `--scope auto|working-tree|branch`: What to review (default: auto)
+  - `auto`: If there are uncommitted changes, review the working tree diff. Otherwise, review the branch diff against base.
+  - `working-tree`: `git diff HEAD` (staged + unstaged changes only)
+  - `branch`: `git diff <base>...HEAD` (all commits on the branch)
 - Preserve the user's arguments exactly. Do not strip flags yourself.
 
+Scope-aware diff gathering:
+1. Determine the scope (default: `auto`):
+   - If `--scope working-tree`: use `git diff HEAD` (combine staged + unstaged)
+   - If `--scope branch`: use `git diff <base>...HEAD` where base defaults to `main`
+   - If `--scope auto` or no `--scope`:
+     - Run `git diff --shortstat` and `git diff --shortstat --cached`
+     - If there are any uncommitted changes, use working-tree mode: `git diff HEAD`
+     - Otherwise, use branch mode: `git diff <base>...HEAD`
+2. Write the diff to a unique temp file: `/tmp/uab-review-input-$RANDOM.txt` (use `mktemp` or `$RANDOM` to avoid collisions with concurrent reviews)
+
 Foreground flow:
-1. Gather the code diff:
-   ```bash
-   git diff main > /tmp/uab-review-input.txt
-   ```
+1. Gather the code diff using scope rules above into a unique temp file (e.g., `TMPFILE=$(mktemp /tmp/uab-review-XXXXXX.txt)`)
 2. Run:
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task review --code-file /tmp/uab-review-input.txt $ARGUMENTS
+   TMPFILE=$(mktemp /tmp/uab-review-XXXXXX.txt) && <diff-command> > "$TMPFILE" && node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task review --code-file "$TMPFILE" $ARGUMENTS; rm -f "$TMPFILE"
    ```
 3. Return the command stdout verbatim, exactly as-is.
 4. Do not paraphrase, summarize, or add commentary before or after it.
-5. Clean up: `rm -f /tmp/uab-review-input.txt`
 
 Background flow:
 - Launch the review with `Bash` in the background:
   ```typescript
   Bash({
-    command: `git diff main > /tmp/uab-review-input.txt && node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task review --code-file /tmp/uab-review-input.txt $ARGUMENTS && rm -f /tmp/uab-review-input.txt`,
+    command: `TMPFILE=$(mktemp /tmp/uab-review-XXXXXX.txt) && <diff-command> > "$TMPFILE" && node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task review --code-file "$TMPFILE" $ARGUMENTS; rm -f "$TMPFILE"`,
     description: "Agent review",
     run_in_background: true
   })

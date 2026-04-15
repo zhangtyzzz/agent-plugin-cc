@@ -1,22 +1,43 @@
 // plugins/agent-bridge/scripts/bridge.ts
 //
 // Usage:
-//   node <path>/dist/bridge.mjs --task review --agent codex --code-file /tmp/uab-input.txt
-//   node <path>/dist/bridge.mjs --task health
-//   node <path>/dist/bridge.mjs --task list
-//   node <path>/dist/bridge.mjs --task compare --agents codex,gemini --code-file /tmp/code.txt
+//   node <path>/dist/bridge.js --task review --agent codex --code-file /tmp/uab-input.txt
+//   node <path>/dist/bridge.js --task health
+//   node <path>/dist/bridge.js --task list
+//   node <path>/dist/bridge.js --task compare --agents codex,opencode --code-file /tmp/code.txt
+//   node <path>/dist/bridge.js --task status [--job-id <id>] [--wait]
+//   node <path>/dist/bridge.js --task result --job-id <id>
+//   node <path>/dist/bridge.js --task cancel --job-id <id>
+//   node <path>/dist/bridge.js --task task-worker --job-id <id> --cwd <path>
 
 import { parseArgs } from "node:util";
 import { readFileSync, existsSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
 // -- Import modules --
 import { loadConfig, type BridgeConfig } from "./config.js";
 import { Router } from "./router.js";
 import { CodexAdapter } from "./adapters/codex.js";
-import { GeminiAdapter } from "./adapters/gemini.js";
 import { OpenCodeAdapter } from "./adapters/opencode.js";
 import { QoderAdapter } from "./adapters/qoder.js";
 import type { BaseAdapter, TaskInput, TaskOutput } from "./adapters/base.js";
+import {
+  generateJobId,
+  upsertJob,
+  listJobs,
+  readJobFile,
+  writeJobFile,
+  appendLogLine,
+  matchJobRef,
+  isAmbiguousJobRef,
+  resolveJobLogFile,
+  type JobRecord,
+} from "./state.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // -- Parse command line args --
 const { values: rawArgs } = parseArgs({
@@ -30,6 +51,10 @@ const { values: rawArgs } = parseArgs({
     context:     { type: "string", short: "c" },
     background:  { type: "boolean", short: "b", default: false },
     base:        { type: "string" },
+    "job-id":    { type: "string" },
+    cwd:         { type: "string" },
+    wait:        { type: "boolean", default: false },
+    all:         { type: "boolean", default: false },
   },
   strict: false,
   allowPositionals: true,
@@ -49,7 +74,6 @@ function createAdapterRegistry(config: BridgeConfig): Map<string, BaseAdapter> {
   const adapterClasses: Record<string, new (cfg: any) => BaseAdapter> = {
     codex: CodexAdapter,
     opencode: OpenCodeAdapter,
-    gemini: GeminiAdapter,
     qoder: QoderAdapter,
   };
 
@@ -62,6 +86,74 @@ function createAdapterRegistry(config: BridgeConfig): Map<string, BaseAdapter> {
   }
 
   return registry;
+}
+
+// -- Background job helpers --
+
+function spawnDetachedWorker(cwd: string, jobId: string): number | null {
+  const scriptPath = join(__dirname, "bridge.js");
+  const child = spawn(process.execPath, [scriptPath, "--task", "task-worker", "--job-id", jobId, "--cwd", cwd], {
+    cwd,
+    env: process.env,
+    detached: true,
+    stdio: "ignore",
+  });
+  child.unref();
+  return child.pid ?? null;
+}
+
+function formatStatusTable(jobs: JobRecord[]): string {
+  if (jobs.length === 0) return "No jobs found.";
+  const lines: string[] = [];
+  lines.push("| ID | Kind | Agent | Status | Summary | Updated |");
+  lines.push("|----|------|-------|--------|---------|---------|");
+  for (const j of jobs) {
+    const shortId = j.id.length > 20 ? j.id.slice(0, 20) + "..." : j.id;
+    const cleanSummary = j.summary.replace(/[\r\n|]/g, " ");
+    const summary = cleanSummary.length > 40 ? cleanSummary.slice(0, 40) + "..." : cleanSummary;
+    const updatedAgo = timeSince(j.updatedAt);
+    lines.push(`| ${shortId} | ${j.kind} | ${j.agent} | ${j.status} | ${summary} | ${updatedAgo} |`);
+  }
+  return lines.join("\n");
+}
+
+function timeSince(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "just now";
+  if (ms < 60_000) return `${Math.floor(ms / 1000)}s ago`;
+  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ago`;
+  return `${Math.floor(ms / 3_600_000)}h ago`;
+}
+
+/** Look up a job by ID or prefix, exit with appropriate error if not found. */
+function resolveJobOrExit(jobs: JobRecord[], ref: string): JobRecord {
+  const job = matchJobRef(jobs, ref);
+  if (job) return job;
+  if (isAmbiguousJobRef(jobs, ref)) {
+    console.error(`Error: job prefix "${ref}" is ambiguous — matches multiple jobs. Use a longer prefix.`);
+  } else {
+    console.error(`Error: job "${ref}" not found.`);
+  }
+  process.exit(1);
+}
+
+function terminateProcessTree(pid: number): boolean {
+  // Verify the process still exists before killing
+  try {
+    process.kill(pid, 0); // signal 0 = existence check
+  } catch {
+    return false; // PID no longer exists or not owned by us
+  }
+  try {
+    process.kill(-pid, "SIGTERM");
+  } catch {
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {
+      // Process already gone
+    }
+  }
+  return true;
 }
 
 // -- Main flow --
@@ -88,6 +180,8 @@ async function main() {
     console.error("Error: --task is required");
     process.exit(1);
   }
+
+  const workingDir = str("cwd") || process.cwd();
 
   // ---- health command ----
   if (task === "health") {
@@ -123,10 +217,218 @@ async function main() {
     return;
   }
 
+  // ---- status command ----
+  if (task === "status") {
+    const jobId = str("job-id");
+    const jobs = listJobs(workingDir);
+
+    if (jobId) {
+      const job = resolveJobOrExit(jobs, jobId);
+
+      // --wait: poll until finished
+      if (rawArgs.wait === true) {
+        const deadline = Date.now() + 6 * 60 * 1000; // 6min (must exceed adapter timeout)
+        let current = job;
+        while (current && (current.status === "queued" || current.status === "running")) {
+          if (Date.now() > deadline) {
+            console.error("Timed out waiting for job to finish.");
+            process.exit(1);
+          }
+          await new Promise((r) => setTimeout(r, 2000));
+          const refreshed = listJobs(workingDir);
+          current = matchJobRef(refreshed, job.id) || current;
+        }
+        // Print final state
+        const full = readJobFile(workingDir, current.id) || current;
+        console.log(`## Job ${full.id}\n`);
+        console.log(`- Status: ${full.status}`);
+        console.log(`- Agent: ${full.agent}`);
+        if (full.result) {
+          console.log(`\n### Result\n`);
+          console.log(full.result.result);
+        }
+        if (full.errorMessage) {
+          console.log(`\n### Error\n\n${full.errorMessage}`);
+        }
+        return;
+      }
+
+      // Single job detail
+      const full = readJobFile(workingDir, job.id) || job;
+      console.log(`## Job ${full.id}\n`);
+      console.log(`- Kind: ${full.kind}`);
+      console.log(`- Agent: ${full.agent}`);
+      console.log(`- Status: ${full.status}`);
+      console.log(`- Phase: ${full.phase}`);
+      console.log(`- Created: ${full.createdAt}`);
+      console.log(`- Updated: ${full.updatedAt}`);
+      if (full.startedAt) console.log(`- Started: ${full.startedAt}`);
+      if (full.completedAt) console.log(`- Completed: ${full.completedAt}`);
+      if (full.pid) console.log(`- PID: ${full.pid}`);
+      if (full.summary) console.log(`- Summary: ${full.summary}`);
+      if (full.errorMessage) console.log(`- Error: ${full.errorMessage}`);
+      return;
+    }
+
+    // No job-id: show table
+    const display = rawArgs.all === true ? jobs : jobs.slice(0, 8);
+    console.log("## Agent Jobs\n");
+    console.log(formatStatusTable(display));
+    if (!rawArgs.all && jobs.length > 8) {
+      console.log(`\n*Showing 8 of ${jobs.length} jobs. Use --all to see all.*`);
+    }
+    return;
+  }
+
+  // ---- result command ----
+  if (task === "result") {
+    const jobId = str("job-id");
+    if (!jobId) {
+      console.error("Error: --job-id is required for task 'result'");
+      process.exit(1);
+    }
+    const jobs = listJobs(workingDir);
+    const job = resolveJobOrExit(jobs, jobId);
+    if (job.status === "queued" || job.status === "running") {
+      console.error(`Job ${job.id} is still ${job.status}. Use /agent:status --job-id ${job.id} --wait to wait for completion.`);
+      process.exit(1);
+    }
+    const full = readJobFile(workingDir, job.id) || job;
+    console.log(`## Result: ${full.id}\n`);
+    console.log(`- Status: ${full.status}`);
+    console.log(`- Agent: ${full.agent}${full.result?.model ? ` (${full.result.model})` : ""}`);
+    if (full.result?.latencyMs) console.log(`- Latency: ${full.result.latencyMs}ms`);
+    if (full.result) {
+      console.log(`\n### Output\n`);
+      console.log(full.result.result);
+    }
+    if (full.errorMessage) {
+      console.log(`\n### Error\n\n${full.errorMessage}`);
+    }
+    return;
+  }
+
+  // ---- cancel command ----
+  if (task === "cancel") {
+    const jobId = str("job-id");
+    if (!jobId) {
+      console.error("Error: --job-id is required for task 'cancel'");
+      process.exit(1);
+    }
+    const jobs = listJobs(workingDir);
+    const job = resolveJobOrExit(jobs, jobId);
+    if (job.status !== "queued" && job.status !== "running") {
+      console.error(`Job ${job.id} is already ${job.status}, cannot cancel.`);
+      process.exit(1);
+    }
+    // Kill the process tree
+    if (job.pid) {
+      terminateProcessTree(job.pid);
+    }
+    // Update state
+    const now = new Date().toISOString();
+    upsertJob(workingDir, { id: job.id, status: "cancelled", phase: "cancelled", completedAt: now, pid: null });
+    const full = readJobFile(workingDir, job.id);
+    if (full) {
+      writeJobFile(workingDir, job.id, { ...full, status: "cancelled", phase: "cancelled", completedAt: now, pid: null });
+    }
+    console.log(`Cancelled job ${job.id}.`);
+    return;
+  }
+
+  // ---- task-worker command (detached background worker) ----
+  if (task === "task-worker") {
+    const jobId = str("job-id");
+    if (!jobId) {
+      console.error("Error: --job-id is required for task-worker");
+      process.exit(1);
+    }
+    const stored = readJobFile(workingDir, jobId);
+    if (!stored || !stored.request) {
+      console.error(`Error: job file for "${jobId}" not found or has no request`);
+      process.exit(1);
+    }
+
+    const request = stored.request as {
+      type: string;
+      code: string;
+      context: string;
+      focus: string;
+      language: string;
+      agent: string;
+    };
+
+    const logFile = stored.logFile;
+
+    // Check if job was cancelled before we started
+    const freshState = readJobFile(workingDir, jobId);
+    if (freshState && freshState.status === "cancelled") {
+      if (logFile) appendLogLine(logFile, "Worker exiting: job was cancelled before start");
+      return;
+    }
+
+    // Mark running
+    const startedAt = new Date().toISOString();
+    upsertJob(workingDir, { id: jobId, status: "running", phase: "running", startedAt, pid: process.pid });
+    writeJobFile(workingDir, jobId, { ...stored, status: "running", phase: "running", startedAt, pid: process.pid });
+    if (logFile) appendLogLine(logFile, `Worker started (PID ${process.pid})`);
+
+    // Execute
+    const adapter = registry.get(request.agent);
+    if (!adapter) {
+      const err = `Agent "${request.agent}" not available`;
+      upsertJob(workingDir, { id: jobId, status: "failed", phase: "failed", errorMessage: err, pid: null });
+      const rec = readJobFile(workingDir, jobId);
+      if (rec) writeJobFile(workingDir, jobId, { ...rec, status: "failed", phase: "failed", errorMessage: err, pid: null });
+      if (logFile) appendLogLine(logFile, `Failed: ${err}`);
+      process.exit(1);
+    }
+
+    const taskInput: TaskInput = {
+      type: request.type as TaskInput["type"],
+      code: request.code,
+      context: request.context,
+      focus: request.focus,
+      language: request.language,
+    };
+
+    try {
+      if (logFile) appendLogLine(logFile, `Executing via ${request.agent}...`);
+      const output = await adapter.execute(taskInput);
+      const completedAt = new Date().toISOString();
+      const result = { agent: output.agent, model: output.model, result: output.result, latencyMs: output.latencyMs };
+      // Don't overwrite if job was cancelled while we were executing
+      const currentState = readJobFile(workingDir, jobId);
+      if (currentState && currentState.status === "cancelled") {
+        if (logFile) appendLogLine(logFile, "Worker finished but job was cancelled, not updating state");
+        return;
+      }
+      upsertJob(workingDir, { id: jobId, status: "completed", phase: "done", completedAt, result, pid: null });
+      const rec = readJobFile(workingDir, jobId);
+      if (rec) writeJobFile(workingDir, jobId, { ...rec, status: "completed", phase: "done", completedAt, result, pid: null });
+      if (logFile) appendLogLine(logFile, `Completed (${output.latencyMs}ms)`);
+    } catch (e: any) {
+      const completedAt = new Date().toISOString();
+      const errorMessage = e.message || String(e);
+      // Don't overwrite if job was cancelled while we were executing
+      const currentStateOnError = readJobFile(workingDir, jobId);
+      if (currentStateOnError && currentStateOnError.status === "cancelled") {
+        if (logFile) appendLogLine(logFile, "Worker failed but job was cancelled, not updating state");
+        return;
+      }
+      upsertJob(workingDir, { id: jobId, status: "failed", phase: "failed", completedAt, errorMessage, pid: null });
+      const rec = readJobFile(workingDir, jobId);
+      if (rec) writeJobFile(workingDir, jobId, { ...rec, status: "failed", phase: "failed", completedAt, errorMessage, pid: null });
+      if (logFile) appendLogLine(logFile, `Failed: ${errorMessage}`);
+      process.exit(1);
+    }
+    return;
+  }
+
   // ---- Commands that need code ----
   const validTasks = ["review", "adversarial-review", "rescue", "explain", "generate", "free", "compare"];
   if (!validTasks.includes(task)) {
-    console.error(`Error: unknown task "${task}". Valid tasks: ${validTasks.join(", ")}`);
+    console.error(`Error: unknown task "${task}". Valid tasks: ${validTasks.join(", ")}, health, list, status, result, cancel`);
     process.exit(1);
   }
 
@@ -151,6 +453,70 @@ async function main() {
     language: str("language") || "",
     background: rawArgs.background === true,
   };
+
+  // ---- Resolve agent ----
+  let agentName: string;
+  const specifiedAgent = str("agent");
+
+  if (specifiedAgent) {
+    agentName = specifiedAgent;
+  } else if (task === "compare") {
+    // compare handles its own agent selection below
+    agentName = "";
+  } else {
+    const routeResult = await router.select(taskInput);
+    agentName = routeResult.agent;
+    if (!rawArgs.background) {
+      console.log(`*Auto-routed to **${agentName}**: ${routeResult.reason}*\n`);
+    }
+  }
+
+  // ---- Background execution ----
+  if (rawArgs.background === true && task === "compare") {
+    console.error("Warning: --background is not supported for compare, running in foreground.");
+  }
+  if (rawArgs.background === true && task !== "compare") {
+    const jobId = generateJobId("task");
+    const logFile = resolveJobLogFile(workingDir, jobId);
+    const summary = (code || str("context") || "").slice(0, 100);
+
+    const jobRecord: JobRecord = {
+      id: jobId,
+      kind: task,
+      title: `Agent ${task.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}`,
+      agent: agentName,
+      summary,
+      status: "queued",
+      phase: "queued",
+      pid: null,
+      logFile,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      request: {
+        type: task,
+        code,
+        context: str("context") || "",
+        focus: str("focus") || "",
+        language: str("language") || "",
+        agent: agentName,
+      },
+    };
+
+    upsertJob(workingDir, jobRecord);
+    writeJobFile(workingDir, jobId, jobRecord);
+    appendLogLine(logFile, "Queued for background execution.");
+
+    const pid = spawnDetachedWorker(workingDir, jobId);
+    if (pid) {
+      upsertJob(workingDir, { id: jobId, pid });
+      const stored = readJobFile(workingDir, jobId);
+      if (stored) writeJobFile(workingDir, jobId, { ...stored, pid });
+    }
+
+    console.log(`Background job started: ${jobId}`);
+    console.log(`Use /agent:status --job-id ${jobId} to check progress.`);
+    return;
+  }
 
   // ---- compare command ----
   if (task === "compare") {
@@ -186,18 +552,7 @@ async function main() {
     return;
   }
 
-  // ---- Single agent execution ----
-  let agentName: string;
-  const specifiedAgent = str("agent");
-
-  if (specifiedAgent) {
-    agentName = specifiedAgent;
-  } else {
-    const routeResult = await router.select(taskInput);
-    agentName = routeResult.agent;
-    console.log(`*Auto-routed to **${agentName}**: ${routeResult.reason}*\n`);
-  }
-
+  // ---- Single agent foreground execution ----
   const adapter = registry.get(agentName);
   if (!adapter) {
     console.error(`Error: agent "${agentName}" not found or not enabled.`);
