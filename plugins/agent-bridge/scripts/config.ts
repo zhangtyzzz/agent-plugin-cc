@@ -93,7 +93,7 @@ export function loadConfig(): BridgeConfig {
   }
   if (!config.agents) config.agents = {};
   if (!config.routing_rules) config.routing_rules = [];
-  if (!config.fallback_chain) config.fallback_chain = ["codex", "gemini", "qoder"];
+  if (!config.fallback_chain) config.fallback_chain = ["codex", "opencode", "qoder"];
 
   return config as BridgeConfig;
 }

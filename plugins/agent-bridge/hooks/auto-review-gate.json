@@ -6,8 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/bridge.js\" --task review --code-file /tmp/uab-stop-review.txt",
-            "timeout": 120
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/stop-review-gate.js\"",
+            "timeout": 900
           }
         ]
       }

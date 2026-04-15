@@ -98,4 +98,59 @@ describe("E2E: bridge CLI", () => {
       }
     });
   });
+
+  describe("--task status", () => {
+    it("outputs job status table (even empty)", () => {
+      const output = run("--task status");
+      assert.ok(output.includes("Agent Jobs") || output.includes("No jobs found"));
+    });
+  });
+
+  describe("--task result without job-id", () => {
+    it("exits with error when --job-id is missing", () => {
+      assert.throws(
+        () => run("--task result"),
+        (err) => {
+          const stderr = err.stderr?.toString() || "";
+          return stderr.includes("--job-id") || err.status !== 0;
+        }
+      );
+    });
+  });
+
+  describe("--task cancel without job-id", () => {
+    it("exits with error when --job-id is missing", () => {
+      assert.throws(
+        () => run("--task cancel"),
+        (err) => {
+          const stderr = err.stderr?.toString() || "";
+          return stderr.includes("--job-id") || err.status !== 0;
+        }
+      );
+    });
+  });
+
+  describe("--task result with nonexistent job", () => {
+    it("exits with error for unknown job", () => {
+      assert.throws(
+        () => run("--task result --job-id nonexistent-job-12345"),
+        (err) => {
+          const stderr = err.stderr?.toString() || "";
+          return stderr.includes("not found") || err.status !== 0;
+        }
+      );
+    });
+  });
+
+  describe("--task cancel with nonexistent job", () => {
+    it("exits with error for unknown job", () => {
+      assert.throws(
+        () => run("--task cancel --job-id nonexistent-job-12345"),
+        (err) => {
+          const stderr = err.stderr?.toString() || "";
+          return stderr.includes("not found") || err.status !== 0;
+        }
+      );
+    });
+  });
 });

@@ -18,13 +18,6 @@
       "cli_binary": "opencode",
       "strengths": ["multi-model", "python", "cost-efficient", "local-models"]
     },
-    "gemini": {
-      "enabled": true,
-      "auth_env": "GOOGLE_API_KEY",
-      "cli_binary": "gemini",
-      "strengths": ["search-grounding", "free-tier", "fast", "google-cloud"],
-      "cost_per_1k": { "input": 0, "output": 0 }
-    },
     "qoder": {
       "enabled": true,
       "auth_env": "QODER_API_KEY",
@@ -39,15 +32,10 @@
       "reason": "OpenCode excels at Python"
     },
     {
-      "match": { "task_type": "explain" },
-      "route_to": "gemini",
-      "reason": "Gemini search grounding suits explanations"
-    },
-    {
       "match": { "task_type": "review", "focus": "sql" },
       "route_to": "qoder",
       "reason": "Qoder specializes in SQL"
     }
   ],
-  "fallback_chain": ["codex", "gemini", "qoder"]
+  "fallback_chain": ["codex", "opencode", "qoder"]
 }
