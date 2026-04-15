@@ -14,7 +14,7 @@ import {
   renameSync,
   unlinkSync,
 } from "node:fs";
-import { basename, join, dirname } from "node:path";
+import { basename, join } from "node:path";
 import { homedir } from "node:os";
 
 // ---- Types ----
@@ -173,8 +173,9 @@ export function upsertJob(
   const removed = sorted.slice(MAX_JOBS);
   writeStateFile(stateDir, pruned);
 
-  // Clean up job files for pruned entries
+  // Clean up job files for pruned entries (skip active jobs)
   for (const old of removed) {
+    if (old.status === "queued" || old.status === "running") continue;
     try { validateJobId(old.id); } catch { continue; }
     const jobFile = join(stateDir, "jobs", `${old.id}.json`);
     const logFileToRemove = join(stateDir, "jobs", `${old.id}.log`);

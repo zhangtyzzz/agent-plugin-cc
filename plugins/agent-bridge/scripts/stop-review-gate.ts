@@ -114,6 +114,8 @@ function main(): void {
 
   if (!config.stopReviewGate) {
     logNote(runningNote);
+    // Emit explicit allow so hook protocol is unambiguous
+    emitDecision({ decision: "allow", reason: "Stop review gate is disabled" });
     return;
   }
 

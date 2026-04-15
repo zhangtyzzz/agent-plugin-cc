@@ -29,6 +29,6 @@ You are a delegation coordinator. When invoked, you:
 ## Routing Heuristics for Rescue Tasks
 
 - Flaky tests / CI failures → prefer Codex (strong at edge cases)
-- Performance regression → prefer Gemini (search grounding for benchmarks)
+- Performance regression → prefer OpenCode (multi-model flexibility)
 - Data pipeline bugs → prefer Qoder (SQL/data domain)
 - Security vulnerabilities → prefer Codex (security audit strength)

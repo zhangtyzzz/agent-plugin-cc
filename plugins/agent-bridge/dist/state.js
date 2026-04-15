@@ -114,8 +114,10 @@ export function upsertJob(cwd, patch) {
     const pruned = sorted.slice(0, MAX_JOBS);
     const removed = sorted.slice(MAX_JOBS);
     writeStateFile(stateDir, pruned);
-    // Clean up job files for pruned entries
+    // Clean up job files for pruned entries (skip active jobs)
     for (const old of removed) {
+        if (old.status === "queued" || old.status === "running")
+            continue;
         try {
             validateJobId(old.id);
         }
