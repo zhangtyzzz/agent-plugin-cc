@@ -28,17 +28,17 @@ Argument handling:
 - `--focus <area>`: Focus area (race-conditions, injection, auth, overflow)
 - `--scope auto|working-tree|branch`: What to review (default: auto)
   - `auto`: If there are uncommitted changes, review the working tree diff. Otherwise, review the branch diff against base.
-  - `working-tree`: `git diff` (staged + unstaged changes only)
+  - `working-tree`: `git diff HEAD` (staged + unstaged changes only)
   - `branch`: `git diff <base>...HEAD` (all commits on the branch)
 - Extra positional text is passed as focus text.
 
 Scope-aware diff gathering:
 1. Determine the scope (default: `auto`):
-   - If `--scope working-tree`: use `git diff` (combine staged + unstaged)
+   - If `--scope working-tree`: use `git diff HEAD` (combine staged + unstaged)
    - If `--scope branch`: use `git diff <base>...HEAD` where base defaults to `main`
    - If `--scope auto` or no `--scope`:
      - Run `git diff --shortstat` and `git diff --shortstat --cached`
-     - If there are any uncommitted changes, use working-tree mode: `git diff`
+     - If there are any uncommitted changes, use working-tree mode: `git diff HEAD`
      - Otherwise, use branch mode: `git diff <base>...HEAD`
 2. Write the diff to `/tmp/uab-review-input.txt`
 

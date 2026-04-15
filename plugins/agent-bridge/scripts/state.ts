@@ -12,6 +12,7 @@ import {
   writeFileSync,
   appendFileSync,
   renameSync,
+  unlinkSync,
 } from "node:fs";
 import { basename, join, dirname } from "node:path";
 import { homedir } from "node:os";
@@ -164,12 +165,22 @@ export function upsertJob(
     jobs.unshift(record);
   }
 
-  // Prune oldest beyond MAX_JOBS
+  // Prune oldest beyond MAX_JOBS and clean up files
   const sorted = jobs.sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   );
   const pruned = sorted.slice(0, MAX_JOBS);
+  const removed = sorted.slice(MAX_JOBS);
   writeStateFile(stateDir, pruned);
+
+  // Clean up job files for pruned entries
+  for (const old of removed) {
+    try { validateJobId(old.id); } catch { continue; }
+    const jobFile = join(stateDir, "jobs", `${old.id}.json`);
+    const logFileToRemove = join(stateDir, "jobs", `${old.id}.log`);
+    try { unlinkSync(jobFile); } catch {}
+    try { unlinkSync(logFileToRemove); } catch {}
+  }
 
   return record;
 }
@@ -210,7 +221,8 @@ export function appendLogLine(logFile: string, line: string): void {
   appendFileSync(logFile, `[${ts}] ${sanitized}\n`, { encoding: "utf-8", mode: 0o600 });
 }
 
-/** Prefix-match a job ID reference against a list of jobs. */
+/** Prefix-match a job ID reference against a list of jobs.
+ *  Returns: { match, ambiguous } — ambiguous is true when multiple jobs match the prefix. */
 export function matchJobRef(
   jobs: JobRecord[],
   ref: string,
@@ -220,7 +232,15 @@ export function matchJobRef(
   if (exact) return exact;
   // Prefix match
   const matches = jobs.filter((j) => j.id.startsWith(ref));
-  return matches.length === 1 ? matches[0] : undefined;
+  if (matches.length === 1) return matches[0];
+  return undefined;
+}
+
+/** Check if a job ref is ambiguous (matches multiple jobs). */
+export function isAmbiguousJobRef(jobs: JobRecord[], ref: string): boolean {
+  const exact = jobs.find((j) => j.id === ref);
+  if (exact) return false;
+  return jobs.filter((j) => j.id.startsWith(ref)).length > 1;
 }
 
 /** Read state-level config. */
