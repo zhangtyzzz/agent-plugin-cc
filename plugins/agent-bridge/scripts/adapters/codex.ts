@@ -34,8 +34,8 @@ export class CodexAdapter extends BaseAdapter {
         ? "\n\nIMPORTANT: Only analyze and report findings. Do not modify any files."
         : "");
 
-    // codex exec --full-auto --skip-git-repo-check [--model <m>] <prompt>
-    const args = ["exec", "--full-auto", "--skip-git-repo-check"];
+    // codex exec --full-auto [--model <m>] <prompt>
+    const args = ["exec", "--full-auto"];
     if (this.model) args.push("--model", this.model);
     args.push(prompt);
     const result = await this.runCliWithRetry(this.config.cliBinary, args);

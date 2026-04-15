@@ -69,7 +69,7 @@ export class OpenCodeAdapter extends BaseAdapter {
       const shellEscape = (s: string) => "'" + s.replace(/'/g, "'\\''") + "'";
       const parts = [
         shellEscape(this.config.cliBinary),
-        "run", "--pure", "--format", "json",
+        "run", "--format", "json",
       ];
       // Only specify model if explicitly configured; otherwise let opencode use its default
       if (this.modelName) {
