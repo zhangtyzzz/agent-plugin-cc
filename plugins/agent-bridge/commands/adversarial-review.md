@@ -40,16 +40,15 @@ Scope-aware diff gathering:
      - Run `git diff --shortstat` and `git diff --shortstat --cached`
      - If there are any uncommitted changes, use working-tree mode: `git diff HEAD`
      - Otherwise, use branch mode: `git diff <base>...HEAD`
-2. Write the diff to `/tmp/uab-review-input.txt`
+2. Write the diff to a unique temp file (use `mktemp` to avoid collisions with concurrent reviews)
 
 Foreground flow:
-1. Gather the code diff using scope rules above into `/tmp/uab-review-input.txt`
+1. Gather the code diff using scope rules above into a unique temp file (e.g., `TMPFILE=$(mktemp /tmp/uab-review-XXXXXX.txt)`)
 2. Run:
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task adversarial-review --code-file /tmp/uab-review-input.txt $ARGUMENTS
+   TMPFILE=$(mktemp /tmp/uab-review-XXXXXX.txt) && <diff-command> > "$TMPFILE" && node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task adversarial-review --code-file "$TMPFILE" $ARGUMENTS; rm -f "$TMPFILE"
    ```
 3. Return the command stdout verbatim.
-4. Clean up: `rm -f /tmp/uab-review-input.txt`
 
 Background flow:
-- Launch with `Bash` in the background, then tell the user it's running.
+- Launch with `Bash` in the background using a unique temp file, then tell the user it's running.

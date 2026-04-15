@@ -64,7 +64,8 @@ function readState(stateDir) {
         // Migration: old format stored bare array
         if (Array.isArray(data))
             return { version: 1, config: { stopReviewGate: false }, jobs: data };
-        return data;
+        // Ensure config field exists (guards against hand-edited state files)
+        return { version: 1, config: { stopReviewGate: false }, jobs: [], ...data };
     }
     catch {
         return { version: 1, config: { stopReviewGate: false }, jobs: [] };
@@ -109,15 +110,15 @@ export function upsertJob(cwd, patch) {
         };
         jobs.unshift(record);
     }
-    // Prune oldest beyond MAX_JOBS and clean up files
+    // Prune oldest beyond MAX_JOBS — keep active (queued/running) jobs in the index
     const sorted = jobs.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-    const pruned = sorted.slice(0, MAX_JOBS);
-    const removed = sorted.slice(MAX_JOBS);
-    writeStateFile(stateDir, pruned);
-    // Clean up job files for pruned entries (skip active jobs)
+    const active = sorted.filter((j) => j.status === "queued" || j.status === "running");
+    const inactive = sorted.filter((j) => j.status !== "queued" && j.status !== "running");
+    const kept = [...active, ...inactive.slice(0, Math.max(0, MAX_JOBS - active.length))];
+    const removed = inactive.slice(Math.max(0, MAX_JOBS - active.length));
+    writeStateFile(stateDir, kept);
+    // Clean up job files for pruned entries
     for (const old of removed) {
-        if (old.status === "queued" || old.status === "running")
-            continue;
         try {
             validateJobId(old.id);
         }

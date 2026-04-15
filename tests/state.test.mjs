@@ -100,7 +100,7 @@ describe("state.ts", () => {
 
     it("prunes to 50 jobs", () => {
       for (let i = 0; i < 55; i++) {
-        upsertJob(testWorkspace, { id: `prune-${i}`, agent: "codex" });
+        upsertJob(testWorkspace, { id: `prune-${i}`, agent: "codex", status: "completed" });
       }
       const jobs = listJobs(testWorkspace);
       assert.ok(jobs.length <= 50);

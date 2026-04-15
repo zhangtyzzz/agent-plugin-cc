@@ -46,23 +46,22 @@ Scope-aware diff gathering:
      - Run `git diff --shortstat` and `git diff --shortstat --cached`
      - If there are any uncommitted changes, use working-tree mode: `git diff HEAD`
      - Otherwise, use branch mode: `git diff <base>...HEAD`
-2. Write the diff to `/tmp/uab-review-input.txt`
+2. Write the diff to a unique temp file: `/tmp/uab-review-input-$RANDOM.txt` (use `mktemp` or `$RANDOM` to avoid collisions with concurrent reviews)
 
 Foreground flow:
-1. Gather the code diff using scope rules above into `/tmp/uab-review-input.txt`
+1. Gather the code diff using scope rules above into a unique temp file (e.g., `TMPFILE=$(mktemp /tmp/uab-review-XXXXXX.txt)`)
 2. Run:
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task review --code-file /tmp/uab-review-input.txt $ARGUMENTS
+   TMPFILE=$(mktemp /tmp/uab-review-XXXXXX.txt) && <diff-command> > "$TMPFILE" && node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task review --code-file "$TMPFILE" $ARGUMENTS; rm -f "$TMPFILE"
    ```
 3. Return the command stdout verbatim, exactly as-is.
 4. Do not paraphrase, summarize, or add commentary before or after it.
-5. Clean up: `rm -f /tmp/uab-review-input.txt`
 
 Background flow:
 - Launch the review with `Bash` in the background:
   ```typescript
   Bash({
-    command: `<diff-command> > /tmp/uab-review-input.txt && node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task review --code-file /tmp/uab-review-input.txt $ARGUMENTS && rm -f /tmp/uab-review-input.txt`,
+    command: `TMPFILE=$(mktemp /tmp/uab-review-XXXXXX.txt) && <diff-command> > "$TMPFILE" && node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task review --code-file "$TMPFILE" $ARGUMENTS; rm -f "$TMPFILE"`,
     description: "Agent review",
     run_in_background: true
   })

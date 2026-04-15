@@ -10,7 +10,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 
-import { getConfig, listJobs, matchJobRef } from "./state.js";
+import { getConfig, listJobs } from "./state.js";
 
 const STOP_REVIEW_TIMEOUT_MS = 15 * 60 * 1000;
 const __filename = fileURLToPath(import.meta.url);

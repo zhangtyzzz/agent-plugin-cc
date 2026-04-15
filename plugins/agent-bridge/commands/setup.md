@@ -28,16 +28,14 @@ If `--enable-review-gate` is specified, create the auto-review hook in `.claude/
   }
 }
 ```
-Then enable the persistent state flag by running:
+Then enable the persistent state flag by running (from the project root, NOT from dist/):
 ```bash
-node -e "import('./state.js').then(m => m.setConfig(process.cwd(), 'stopReviewGate', true))" --input-type=module
+node -e "import('${CLAUDE_PLUGIN_ROOT}/dist/state.js').then(m => m.setConfig(process.cwd(), 'stopReviewGate', true))" --input-type=module
 ```
-(Run this from `${CLAUDE_PLUGIN_ROOT}/dist/`)
 
 If `--disable-review-gate` is specified, remove the Stop hook entry from `.claude/settings.json` and disable the state flag:
 ```bash
-node -e "import('./state.js').then(m => m.setConfig(process.cwd(), 'stopReviewGate', false))" --input-type=module
+node -e "import('${CLAUDE_PLUGIN_ROOT}/dist/state.js').then(m => m.setConfig(process.cwd(), 'stopReviewGate', false))" --input-type=module
 ```
-(Run this from `${CLAUDE_PLUGIN_ROOT}/dist/`)
 
 Present the health output to the user.

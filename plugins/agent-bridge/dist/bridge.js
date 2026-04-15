@@ -87,7 +87,8 @@ function formatStatusTable(jobs) {
     lines.push("|----|------|-------|--------|---------|---------|");
     for (const j of jobs) {
         const shortId = j.id.length > 20 ? j.id.slice(0, 20) + "..." : j.id;
-        const summary = j.summary.replace(/[\r\n|]/g, " ").length > 40 ? j.summary.replace(/[\r\n|]/g, " ").slice(0, 40) + "..." : j.summary.replace(/[\r\n|]/g, " ");
+        const cleanSummary = j.summary.replace(/[\r\n|]/g, " ");
+        const summary = cleanSummary.length > 40 ? cleanSummary.slice(0, 40) + "..." : cleanSummary;
         const updatedAgo = timeSince(j.updatedAt);
         lines.push(`| ${shortId} | ${j.kind} | ${j.agent} | ${j.status} | ${summary} | ${updatedAgo} |`);
     }
