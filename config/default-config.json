@@ -22,6 +22,7 @@
       "enabled": true,
       "auth_env": "QODER_API_KEY",
       "cli_binary": "qodercli",
+      "model": "ultimate",
       "strengths": ["data-analysis", "sql", "business-logic"]
     }
   },
