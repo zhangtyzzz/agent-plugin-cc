@@ -11,8 +11,9 @@ import {
   readFileSync,
   writeFileSync,
   appendFileSync,
+  renameSync,
 } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, join, dirname } from "node:path";
 import { homedir } from "node:os";
 
 // ---- Types ----
@@ -46,16 +47,18 @@ function validateJobId(jobId: string): void {
   }
 }
 
-/** Write a file with restrictive permissions (0o600). */
+/** Write a file atomically with restrictive permissions (0o600). */
 function writeFileRestricted(path: string, data: string): void {
-  writeFileSync(path, data, { encoding: "utf-8", mode: 0o600 });
+  const tmp = `${path}.${randomBytes(4).toString("hex")}.tmp`;
+  writeFileSync(tmp, data, { encoding: "utf-8", mode: 0o600 });
+  renameSync(tmp, path);
 }
 
 // ---- ID generation ----
 
 export function generateJobId(prefix = "task"): string {
   const ts = Date.now().toString(36);
-  const rand = Math.random().toString(36).slice(2, 8);
+  const rand = randomBytes(4).toString("hex");
   return `${prefix}-${ts}-${rand}`;
 }
 
@@ -122,10 +125,9 @@ function readStateFile(stateDir: string): JobRecord[] {
 }
 
 function writeStateFile(stateDir: string, jobs: JobRecord[]): void {
-  const stateDir2 = stateDir; // avoid shadowing
-  const state = readState(stateDir2);
+  const state = readState(stateDir);
   state.jobs = jobs;
-  writeState(stateDir2, state);
+  writeState(stateDir, state);
 }
 
 // ---- Public API ----

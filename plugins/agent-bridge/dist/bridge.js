@@ -39,7 +39,6 @@ const { values: rawArgs } = parseArgs({
         cwd: { type: "string" },
         wait: { type: "boolean", default: false },
         all: { type: "boolean", default: false },
-        scope: { type: "string" },
     },
     strict: false,
     allowPositionals: true,
@@ -103,6 +102,13 @@ function timeSince(iso) {
     return `${Math.floor(ms / 3_600_000)}h ago`;
 }
 function terminateProcessTree(pid) {
+    // Verify the process still exists before killing
+    try {
+        process.kill(pid, 0); // signal 0 = existence check
+    }
+    catch {
+        return false; // PID no longer exists or not owned by us
+    }
     try {
         process.kill(-pid, "SIGTERM");
     }
@@ -114,6 +120,7 @@ function terminateProcessTree(pid) {
             // Process already gone
         }
     }
+    return true;
 }
 // -- Main flow --
 async function main() {

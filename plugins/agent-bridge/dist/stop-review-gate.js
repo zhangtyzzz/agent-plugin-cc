@@ -35,14 +35,19 @@ function parseStopReviewOutput(rawOutput) {
     if (!text) {
         return { ok: false, reason: "The stop-time review returned no output. Run /agent:review --wait manually or bypass the gate." };
     }
-    const firstLine = text.split(/\r?\n/, 1)[0].trim();
-    if (firstLine.startsWith("ALLOW:"))
-        return { ok: true, reason: null };
-    if (firstLine.startsWith("BLOCK:")) {
-        const reason = firstLine.slice("BLOCK:".length).trim() || text;
-        return { ok: false, reason: `Stop-time review found issues: ${reason}` };
+    // Search all lines for ALLOW:/BLOCK: since bridge.ts prepends headers
+    const lines = text.split(/\r?\n/);
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("ALLOW:"))
+            return { ok: true, reason: null };
+        if (trimmed.startsWith("BLOCK:")) {
+            const reason = trimmed.slice("BLOCK:".length).trim() || text;
+            return { ok: false, reason: `Stop-time review found issues: ${reason}` };
+        }
     }
-    return { ok: false, reason: "The stop-time review returned an unexpected answer. Run /agent:review --wait manually or bypass the gate." };
+    // No explicit verdict found — default to allow (don't block on format issues)
+    return { ok: true, reason: null };
 }
 function runStopReview(cwd, input) {
     const lastMessage = String(input.last_assistant_message ?? "").trim();

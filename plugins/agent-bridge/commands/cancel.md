@@ -11,12 +11,14 @@ Raw slash-command arguments:
 `$ARGUMENTS`
 
 Argument handling:
-- `<job-id>` (required): the job ID or prefix to cancel
+- `<job-id>` (required): the job ID or prefix to cancel (validate: alphanumeric + hyphens only)
 
 Execution:
-1. Run:
+1. Extract the job-id from the arguments. Validate it contains only alphanumeric characters and hyphens.
+2. Run:
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task cancel --job-id $ARGUMENTS
+   node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task cancel --job-id "<job-id>"
    ```
-2. Return the output verbatim.
-3. Do not paraphrase, summarize, or add commentary.
+3. Return the output verbatim.
+4. Do not paraphrase, summarize, or add commentary.
+5. IMPORTANT: Always quote the job-id value in the shell command.

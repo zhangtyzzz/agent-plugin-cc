@@ -2,8 +2,8 @@
 //
 // Persistent per-workspace job state management.
 // State directory: ~/.universal-agent-bridge/state/<basename>-<hash16>/
-import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, renameSync, } from "node:fs";
 import { basename, join } from "node:path";
 import { homedir } from "node:os";
 const MAX_JOBS = 50;
@@ -14,14 +14,16 @@ function validateJobId(jobId) {
         throw new Error(`Invalid job ID: ${jobId}`);
     }
 }
-/** Write a file with restrictive permissions (0o600). */
+/** Write a file atomically with restrictive permissions (0o600). */
 function writeFileRestricted(path, data) {
-    writeFileSync(path, data, { encoding: "utf-8", mode: 0o600 });
+    const tmp = `${path}.${randomBytes(4).toString("hex")}.tmp`;
+    writeFileSync(tmp, data, { encoding: "utf-8", mode: 0o600 });
+    renameSync(tmp, path);
 }
 // ---- ID generation ----
 export function generateJobId(prefix = "task") {
     const ts = Date.now().toString(36);
-    const rand = Math.random().toString(36).slice(2, 8);
+    const rand = randomBytes(4).toString("hex");
     return `${prefix}-${ts}-${rand}`;
 }
 // ---- State directory ----
@@ -75,10 +77,9 @@ function readStateFile(stateDir) {
     return readState(stateDir).jobs;
 }
 function writeStateFile(stateDir, jobs) {
-    const stateDir2 = stateDir; // avoid shadowing
-    const state = readState(stateDir2);
+    const state = readState(stateDir);
     state.jobs = jobs;
-    writeState(stateDir2, state);
+    writeState(stateDir, state);
 }
 // ---- Public API ----
 /** Insert or update a job record. Prunes to MAX_JOBS (LRU by updatedAt). */
