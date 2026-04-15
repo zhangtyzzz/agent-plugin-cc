@@ -3,10 +3,21 @@
 // Persistent per-workspace job state management.
 // State directory: ~/.universal-agent-bridge/state/<basename>-<hash16>/
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, } from "node:fs";
 import { basename, join } from "node:path";
 import { homedir } from "node:os";
 const MAX_JOBS = 50;
+const SAFE_ID_RE = /^[a-zA-Z0-9_-]+$/;
+/** Validate a job ID contains only safe characters (no path traversal). */
+function validateJobId(jobId) {
+    if (!SAFE_ID_RE.test(jobId)) {
+        throw new Error(`Invalid job ID: ${jobId}`);
+    }
+}
+/** Write a file with restrictive permissions (0o600). */
+function writeFileRestricted(path, data) {
+    writeFileSync(path, data, { encoding: "utf-8", mode: 0o600 });
+}
 // ---- ID generation ----
 export function generateJobId(prefix = "task") {
     const ts = Date.now().toString(36);
@@ -15,16 +26,27 @@ export function generateJobId(prefix = "task") {
 }
 // ---- State directory ----
 export function resolveStateDir(cwd) {
-    const name = basename(cwd);
+    const name = basename(cwd) || "root";
     const hash = createHash("sha256").update(cwd).digest("hex").slice(0, 16);
     const root = process.env.CLAUDE_PLUGIN_DATA ||
         join(homedir(), ".universal-agent-bridge", "state");
     const dir = join(root, `${name}-${hash}`);
-    mkdirSync(join(dir, "jobs"), { recursive: true });
+    const jobsDir = join(dir, "jobs");
+    mkdirSync(jobsDir, { recursive: true, mode: 0o700 });
+    // Ensure restrictive permissions even if dir already existed
+    try {
+        chmodSync(dir, 0o700);
+    }
+    catch { }
+    try {
+        chmodSync(jobsDir, 0o700);
+    }
+    catch { }
     return dir;
 }
 /** Resolve the log file path for a job. */
 export function resolveJobLogFile(cwd, jobId) {
+    validateJobId(jobId);
     return join(resolveStateDir(cwd), "jobs", `${jobId}.log`);
 }
 // ---- state.json helpers ----
@@ -47,7 +69,7 @@ function readState(stateDir) {
     }
 }
 function writeState(stateDir, state) {
-    writeFileSync(stateFilePath(stateDir), JSON.stringify(state, null, 2), "utf-8");
+    writeFileRestricted(stateFilePath(stateDir), JSON.stringify(state, null, 2));
 }
 function readStateFile(stateDir) {
     return readState(stateDir).jobs;
@@ -99,6 +121,7 @@ export function listJobs(cwd) {
 }
 /** Read full job detail from jobs/<jobId>.json. */
 export function readJobFile(cwd, jobId) {
+    validateJobId(jobId);
     const stateDir = resolveStateDir(cwd);
     const p = join(stateDir, "jobs", `${jobId}.json`);
     if (!existsSync(p))
@@ -112,13 +135,15 @@ export function readJobFile(cwd, jobId) {
 }
 /** Write full job detail to jobs/<jobId>.json. */
 export function writeJobFile(cwd, jobId, data) {
+    validateJobId(jobId);
     const stateDir = resolveStateDir(cwd);
-    writeFileSync(join(stateDir, "jobs", `${jobId}.json`), JSON.stringify(data, null, 2), "utf-8");
+    writeFileRestricted(join(stateDir, "jobs", `${jobId}.json`), JSON.stringify(data, null, 2));
 }
 /** Append a timestamped line to a job's log file. */
 export function appendLogLine(logFile, line) {
     const ts = new Date().toISOString();
-    appendFileSync(logFile, `[${ts}] ${line}\n`, "utf-8");
+    const sanitized = line.replace(/[\r\n]/g, " ");
+    appendFileSync(logFile, `[${ts}] ${sanitized}\n`, { encoding: "utf-8", mode: 0o600 });
 }
 /** Prefix-match a job ID reference against a list of jobs. */
 export function matchJobRef(jobs, ref) {

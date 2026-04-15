@@ -3,6 +3,7 @@
 // Standalone hook script for the Stop review gate.
 // Reads JSON from stdin, runs a review via bridge.js, emits BLOCK/ALLOW decision.
 import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,7 +49,7 @@ function runStopReview(cwd, input) {
     if (!lastMessage)
         return { ok: true, reason: null };
     // Write the last assistant message to a temp file for review
-    const tmpFile = join(tmpdir(), `uab-stop-review-${Date.now()}.txt`);
+    const tmpFile = join(tmpdir(), `uab-stop-review-${randomBytes(8).toString("hex")}.txt`);
     try {
         const prompt = [
             "Review the following Claude response for correctness and safety.",
@@ -57,7 +58,7 @@ function runStopReview(cwd, input) {
             "Previous Claude response:",
             lastMessage,
         ].join("\n");
-        writeFileSync(tmpFile, prompt, "utf-8");
+        writeFileSync(tmpFile, prompt, { encoding: "utf-8", mode: 0o600 });
         const scriptPath = join(SCRIPT_DIR, "bridge.js");
         const result = spawnSync(process.execPath, [scriptPath, "--task", "review", "--code-file", tmpFile, "--cwd", cwd], {
             cwd,
