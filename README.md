@@ -15,15 +15,14 @@ Claude Code 插件 — 将多个 CLI 编码 Agent 通过统一适配层桥接到
 
 ## 安装
 
-```bash
-git clone https://github.com/zhangtyzzz/agent-plugin-cc.git
-cd agent-plugin-cc
+在 Claude Code 中直接运行：
 
-# 在 Claude Code 中安装插件
-/install ./plugins/agent-bridge
+```
+/plugin marketplace add zhangtyzzz/agent-plugin-cc
+/plugin install agent-bridge@universal-agent-bridge
 ```
 
-无需 `npm install` — 编译后的 JS 已包含在仓库中。
+无需 `git clone`，无需 `npm install` — Claude Code 自动拉取，编译后的 JS 已包含在仓库中。
 
 各 Agent CLI 安装方式：
 ```bash

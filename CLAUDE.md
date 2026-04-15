@@ -4,15 +4,13 @@
 A Claude Code plugin that bridges multiple CLI coding agents (Codex, OpenCode, Gemini CLI, QoderCLI) through a unified adapter layer with intelligent routing.
 
 ## Installation
-```bash
-git clone https://github.com/zhangtyzzz/agent-plugin-cc.git
-cd agent-plugin-cc
-
-# In Claude Code:
-/install ./plugins/agent-bridge
+In Claude Code, run:
+```
+/plugin marketplace add zhangtyzzz/agent-plugin-cc
+/plugin install agent-bridge@universal-agent-bridge
 ```
 
-No `npm install` required — compiled JS is included in the repo.
+No `git clone` or `npm install` required — Claude Code pulls the repo automatically, and compiled JS is included.
 
 ## Slash Commands
 - `/agent:review` — Code review (auto-routes or `--agent codex`)

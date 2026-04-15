@@ -1,0 +1,21 @@
+{
+  "name": "universal-agent-bridge",
+  "owner": {
+    "name": "tianyi"
+  },
+  "metadata": {
+    "description": "Bridge multiple CLI coding agents (Codex, OpenCode, Gemini CLI, QoderCLI) into Claude Code with intelligent routing.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "agent-bridge",
+      "description": "Universal multi-agent bridge with intelligent routing",
+      "version": "1.0.0",
+      "author": {
+        "name": "tianyi"
+      },
+      "source": "./plugins/agent-bridge"
+    }
+  ]
+}
