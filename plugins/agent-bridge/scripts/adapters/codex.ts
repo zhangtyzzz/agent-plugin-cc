@@ -1,0 +1,44 @@
+import { BaseAdapter, type AdapterConfig, type TaskInput, type TaskOutput, type HealthResult } from "./base.js";
+
+export class CodexAdapter extends BaseAdapter {
+  config: AdapterConfig = {
+    name: "codex",
+    displayName: "OpenAI Codex",
+    cliBinary: "codex",
+    authEnvVar: "OPENAI_API_KEY",
+    capabilities: ["review", "adversarial-review", "rescue", "generate", "explain"],
+    strengths: ["security", "edge-cases", "deep-reasoning", "typescript"],
+    costPer1kTokens: { input: 0.003, output: 0.012 },
+  };
+
+  async healthCheck(): Promise<HealthResult> {
+    try {
+      const version = await this.runCli(this.config.cliBinary, ["--version"], 5000);
+      return { ok: true, version: version.trim() };
+    } catch {
+      return { ok: false, error: "codex CLI not installed" };
+    }
+  }
+
+  async execute(task: TaskInput): Promise<TaskOutput> {
+    const start = Date.now();
+    const prompt = this.buildReviewPrompt(task) +
+      (task.type !== "rescue" && task.type !== "generate"
+        ? "\n\nIMPORTANT: Only analyze and report findings. Do not modify any files."
+        : "");
+
+    // codex exec --full-auto "<prompt>"
+    const args = ["exec", "--full-auto", "--skip-git-repo-check", prompt];
+    const result = await this.runCliWithRetry(this.config.cliBinary, args);
+
+    const latencyMs = Date.now() - start;
+    this.logCost({ agent: "codex", task: task.type, latencyMs, model: "codex-1" });
+
+    return {
+      agent: "codex",
+      model: "codex-1",
+      result,
+      latencyMs,
+    };
+  }
+}

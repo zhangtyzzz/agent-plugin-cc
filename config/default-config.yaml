@@ -1,0 +1,51 @@
+bridge:
+  default_strategy: best_fit
+  cost_limit_usd_per_day: 5.00
+  log_level: info
+
+agents:
+  codex:
+    enabled: true
+    auth_env: OPENAI_API_KEY
+    cli_binary: codex
+    cli_args: ["--approval-mode", "full-auto", "--quiet"]
+    strengths: [security, edge-cases, deep-reasoning, typescript]
+    cost_per_1k: { input: 0.003, output: 0.012 }
+
+  opencode:
+    enabled: true
+    auth_env: OPENROUTER_API_KEY
+    cli_binary: opencode
+    strengths: [multi-model, python, cost-efficient, local-models]
+
+  gemini:
+    enabled: true
+    auth_env: GOOGLE_API_KEY
+    cli_binary: gemini
+    strengths: [search-grounding, free-tier, fast, google-cloud]
+    cost_per_1k: { input: 0, output: 0 }
+
+  qoder:
+    enabled: true
+    auth_env: QODER_API_KEY
+    cli_binary: qodercli
+    strengths: [data-analysis, sql, business-logic]
+
+routing_rules:
+  - match: { task_type: security_audit }
+    route_to: codex
+    reason: "Codex security audit training advantage"
+
+  - match: { task_type: review, language: python }
+    route_to: opencode
+    reason: "OpenCode + Sonnet excels at Python"
+
+  - match: { task_type: explain }
+    route_to: gemini
+    reason: "Gemini search grounding suits explanations"
+
+  - match: { task_type: review, focus: sql }
+    route_to: qoder
+    reason: "Qoder specializes in SQL"
+
+fallback_chain: [codex, gemini, qoder]
