@@ -93,19 +93,32 @@ export class BaseAdapter {
     buildReviewPrompt(task) {
         const focus = task.focus ? `Focus specifically on: ${task.focus}.\n\n` : "";
         const lang = task.language ? `Language: ${task.language}\n` : "";
+        let prompt;
         switch (task.type) {
             case "review":
-                return `${focus}${lang}Review the following code for bugs, edge cases, error handling, and improvements:\n\n${task.code}`;
+                prompt = `${focus}${lang}Review the following code for bugs, edge cases, error handling, and improvements:\n\n${task.code}`;
+                break;
             case "adversarial-review":
-                return `${focus}${lang}Adversarial code review: actively try to break this code, find security vulnerabilities, race conditions, and edge cases:\n\n${task.code}`;
+                prompt = `${focus}${lang}Adversarial code review: actively try to break this code, find security vulnerabilities, race conditions, and edge cases:\n\n${task.code}`;
+                break;
             case "rescue":
-                return `Investigate and fix this issue:\n\nContext: ${task.context || "See code below"}\n\n${task.code}`;
+                prompt = `Investigate and fix this issue:\n\nContext: ${task.context || "See code below"}\n\n${task.code}`;
+                break;
             case "explain":
-                return `${lang}Explain what this code does, step by step. Include the overall architecture, key decisions, and any potential issues:\n\n${task.code}`;
+                prompt = `${lang}Explain what this code does, step by step. Include the overall architecture, key decisions, and any potential issues:\n\n${task.code}`;
+                break;
             case "generate":
-                return `${lang}${task.context || task.code}`;
+                prompt = `${lang}${task.context || task.code}`;
+                break;
             default:
-                return task.code;
+                prompt = task.code || "";
+                break;
         }
+        // Read-only tasks get an explicit instruction not to modify files
+        const readOnlyTypes = ["review", "adversarial-review", "explain"];
+        if (readOnlyTypes.includes(task.type)) {
+            prompt += "\n\nIMPORTANT: Only analyze and report findings. Do not modify any files.";
+        }
+        return prompt;
     }
 }

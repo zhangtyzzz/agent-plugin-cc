@@ -29,10 +29,7 @@ export class CodexAdapter extends BaseAdapter {
 
   async execute(task: TaskInput): Promise<TaskOutput> {
     const start = Date.now();
-    const prompt = this.buildReviewPrompt(task) +
-      (task.type !== "rescue" && task.type !== "generate"
-        ? "\n\nIMPORTANT: Only analyze and report findings. Do not modify any files."
-        : "");
+    const prompt = this.buildReviewPrompt(task);
 
     // codex exec --full-auto [--model <m>] <prompt>
     const args = ["exec", "--full-auto"];

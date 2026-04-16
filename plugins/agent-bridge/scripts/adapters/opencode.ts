@@ -10,7 +10,7 @@ export class OpenCodeAdapter extends BaseAdapter {
     displayName: "OpenCode",
     cliBinary: "opencode",
     authEnvVar: "OPENROUTER_API_KEY",
-    capabilities: ["review", "generate", "explain", "rescue"],
+    capabilities: ["review", "adversarial-review", "rescue", "generate", "explain"],
     strengths: ["multi-model", "python", "cost-efficient", "local-models"],
   };
 
@@ -32,10 +32,7 @@ export class OpenCodeAdapter extends BaseAdapter {
 
   async execute(task: TaskInput): Promise<TaskOutput> {
     const start = Date.now();
-    const prompt = this.buildReviewPrompt(task) +
-      (task.type !== "rescue" && task.type !== "generate"
-        ? "\n\nIMPORTANT: Only analyze and report findings. Do not modify any files."
-        : "");
+    const prompt = this.buildReviewPrompt(task);
 
     const raw = await this.runOpenCode(prompt);
     const result = this.parseJsonOutput(raw);

@@ -64,6 +64,16 @@ const BUILTIN_DEFAULT: BridgeConfig = {
   },
   routing_rules: [
     {
+      match: { task_type: "adversarial-review" },
+      route_to: "codex",
+      reason: "Codex excels at security audits",
+    },
+    {
+      match: { task_type: "rescue" },
+      route_to: "codex",
+      reason: "Codex excels at debugging and edge cases",
+    },
+    {
       match: { task_type: "review", language: "python" },
       route_to: "opencode",
       reason: "OpenCode excels at Python",
@@ -117,6 +127,10 @@ export function loadConfig(): BridgeConfig {
   const projectConfigPath = resolve(cwd, ".universal-agent-bridge", "config.json");
   const projectConfig = loadJsonFile(projectConfigPath);
   if (projectConfig) config = deepMerge(config, projectConfig);
+
+  // Arrays (routing_rules, fallback_chain) use standard override semantics:
+  // project replaces user, user replaces built-in — no special merge needed.
+  // deepMerge already handles this correctly (arrays are replaced wholesale).
 
   return config as BridgeConfig;
 }

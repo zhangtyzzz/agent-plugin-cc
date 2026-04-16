@@ -5,7 +5,7 @@ export class QoderAdapter extends BaseAdapter {
         displayName: "Qoder",
         cliBinary: "qodercli",
         authEnvVar: "QODER_API_KEY",
-        capabilities: ["review", "explain", "generate"],
+        capabilities: ["review", "adversarial-review", "rescue", "generate", "explain"],
         strengths: ["data-analysis", "sql", "business-logic"],
     };
     modelLevel;
@@ -25,10 +25,7 @@ export class QoderAdapter extends BaseAdapter {
     }
     async execute(task) {
         const start = Date.now();
-        const prompt = this.buildReviewPrompt(task) +
-            (task.type !== "rescue" && task.type !== "generate"
-                ? "\n\nIMPORTANT: Only analyze and report findings. Do not modify any files."
-                : "");
+        const prompt = this.buildReviewPrompt(task);
         // qodercli -p "<prompt>" --yolo --output-format text [--model <level>]
         const args = ["-p", prompt, "--yolo", "--output-format", "text"];
         if (this.modelLevel) {
