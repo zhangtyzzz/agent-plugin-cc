@@ -111,7 +111,7 @@ export class BaseAdapter {
                 prompt = `${lang}${task.context || task.code}`;
                 break;
             default:
-                prompt = task.code;
+                prompt = task.code || "";
                 break;
         }
         // Read-only tasks get an explicit instruction not to modify files

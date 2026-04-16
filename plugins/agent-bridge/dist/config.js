@@ -79,6 +79,7 @@ function loadJsonFile(path) {
 export function loadConfig() {
     // Start with built-in defaults (always available, no file dependency)
     let config = structuredClone(BUILTIN_DEFAULT);
+    const builtinRules = config.routing_rules;
     // User-level config override: ~/.universal-agent-bridge/config.json
     const homeDir = process.env.HOME || process.env.USERPROFILE || "";
     const userConfigPath = resolve(homeDir, ".universal-agent-bridge", "config.json");
@@ -91,5 +92,13 @@ export function loadConfig() {
     const projectConfig = loadJsonFile(projectConfigPath);
     if (projectConfig)
         config = deepMerge(config, projectConfig);
+    // Merge routing_rules: user/project rules prepend (higher priority), built-in rules append
+    // deepMerge replaces arrays wholesale, so we restore built-in rules that were overwritten
+    if (userConfig?.routing_rules || projectConfig?.routing_rules) {
+        const userRules = config.routing_rules || [];
+        config.routing_rules = [...userRules, ...builtinRules.filter((br) => !userRules.some((ur) => ur.match?.task_type === br.match?.task_type &&
+                ur.match?.language === br.match?.language &&
+                ur.match?.focus === br.match?.focus))];
+    }
     return config;
 }

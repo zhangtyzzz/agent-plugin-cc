@@ -162,7 +162,7 @@ export abstract class BaseAdapter {
         prompt = `${lang}${task.context || task.code}`;
         break;
       default:
-        prompt = task.code;
+        prompt = task.code || "";
         break;
     }
 
