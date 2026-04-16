@@ -26,7 +26,7 @@ No `git clone` or `npm install` required — Claude Code pulls the repo automati
 - `/agent:cancel` — Cancel a running background job
 
 ## Configuration
-Edit `config/default-config.json` or create `~/.universal-agent-bridge/config.json`:
+All three agents are enabled by default (zero-config). The router auto-skips agents whose CLI is not installed. To customize, create `~/.universal-agent-bridge/config.json`:
 ```json
 {
   "agents": {
