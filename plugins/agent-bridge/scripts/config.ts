@@ -115,34 +115,22 @@ function loadJsonFile(path: string): any {
 export function loadConfig(): BridgeConfig {
   // Start with built-in defaults (always available, no file dependency)
   let config: any = structuredClone(BUILTIN_DEFAULT);
-  const builtinRules = config.routing_rules as RoutingRuleConfig[];
 
   // User-level config override: ~/.universal-agent-bridge/config.json
   const homeDir = process.env.HOME || process.env.USERPROFILE || "";
   const userConfigPath = resolve(homeDir, ".universal-agent-bridge", "config.json");
   const userConfig = loadJsonFile(userConfigPath);
+  if (userConfig) config = deepMerge(config, userConfig);
 
   // Project-level config override: ./.universal-agent-bridge/config.json
   const cwd = process.cwd();
   const projectConfigPath = resolve(cwd, ".universal-agent-bridge", "config.json");
   const projectConfig = loadJsonFile(projectConfigPath);
-
-  // Extract routing_rules before deepMerge (which replaces arrays wholesale)
-  const userRules: RoutingRuleConfig[] | undefined = userConfig?.routing_rules;
-  const projectRules: RoutingRuleConfig[] | undefined = projectConfig?.routing_rules;
-
-  // Deep-merge non-array config (agents, bridge settings, etc.)
-  if (userConfig) config = deepMerge(config, userConfig);
   if (projectConfig) config = deepMerge(config, projectConfig);
 
-  // Compose routing_rules: project > user > built-in (priority order)
-  // If user explicitly sets routing_rules: [], that disables built-in rules
-  const hasCustomRules = userRules !== undefined || projectRules !== undefined;
-  if (hasCustomRules) {
-    const custom = [...(projectRules || []), ...(userRules || [])];
-    // If any custom rules exist, append built-ins; if custom is empty [], user opted out
-    config.routing_rules = custom.length > 0 ? [...custom, ...builtinRules] : custom;
-  }
+  // Arrays (routing_rules, fallback_chain) use standard override semantics:
+  // project replaces user, user replaces built-in — no special merge needed.
+  // deepMerge already handles this correctly (arrays are replaced wholesale).
 
   return config as BridgeConfig;
 }
