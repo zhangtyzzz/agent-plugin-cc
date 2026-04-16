@@ -31,6 +31,16 @@ const BUILTIN_DEFAULT = {
     },
     routing_rules: [
         {
+            match: { task_type: "adversarial-review" },
+            route_to: "codex",
+            reason: "Codex excels at security audits",
+        },
+        {
+            match: { task_type: "rescue" },
+            route_to: "codex",
+            reason: "Codex excels at debugging and edge cases",
+        },
+        {
             match: { task_type: "review", language: "python" },
             route_to: "opencode",
             reason: "OpenCode excels at Python",
