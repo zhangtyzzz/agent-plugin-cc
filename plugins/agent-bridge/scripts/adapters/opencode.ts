@@ -33,7 +33,9 @@ export class OpenCodeAdapter extends BaseAdapter {
   async execute(task: TaskInput): Promise<TaskOutput> {
     const start = Date.now();
     const prompt = this.buildReviewPrompt(task) +
-      "\n\nIMPORTANT: Only analyze and report findings. Do not modify any files.";
+      (task.type !== "rescue" && task.type !== "generate"
+        ? "\n\nIMPORTANT: Only analyze and report findings. Do not modify any files."
+        : "");
 
     const raw = await this.runOpenCode(prompt);
     const result = this.parseJsonOutput(raw);

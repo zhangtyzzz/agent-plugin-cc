@@ -42,3 +42,6 @@ At least one CLI agent must be installed:
 - `npm install -g @openai/codex`
 - `brew install opencode`
 - QoderCLI (see https://docs.qoder.com/cli/using-cli)
+
+## Versioning
+Plugin version is in `plugins/agent-bridge/.claude-plugin/plugin.json`. **Must bump version on every release** — Claude Code caches by version number, same version won't re-download. After bumping, users run `/plugin` to update.
