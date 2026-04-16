@@ -84,21 +84,25 @@ export function loadConfig() {
     const homeDir = process.env.HOME || process.env.USERPROFILE || "";
     const userConfigPath = resolve(homeDir, ".universal-agent-bridge", "config.json");
     const userConfig = loadJsonFile(userConfigPath);
-    if (userConfig)
-        config = deepMerge(config, userConfig);
     // Project-level config override: ./.universal-agent-bridge/config.json
     const cwd = process.cwd();
     const projectConfigPath = resolve(cwd, ".universal-agent-bridge", "config.json");
     const projectConfig = loadJsonFile(projectConfigPath);
+    // Extract routing_rules before deepMerge (which replaces arrays wholesale)
+    const userRules = userConfig?.routing_rules;
+    const projectRules = projectConfig?.routing_rules;
+    // Deep-merge non-array config (agents, bridge settings, etc.)
+    if (userConfig)
+        config = deepMerge(config, userConfig);
     if (projectConfig)
         config = deepMerge(config, projectConfig);
-    // Merge routing_rules: user/project rules prepend (higher priority), built-in rules append
-    // deepMerge replaces arrays wholesale, so we restore built-in rules that were overwritten
-    if (userConfig?.routing_rules || projectConfig?.routing_rules) {
-        const userRules = config.routing_rules || [];
-        config.routing_rules = [...userRules, ...builtinRules.filter((br) => !userRules.some((ur) => ur.match?.task_type === br.match?.task_type &&
-                ur.match?.language === br.match?.language &&
-                ur.match?.focus === br.match?.focus))];
+    // Compose routing_rules: project > user > built-in (priority order)
+    // If user explicitly sets routing_rules: [], that disables built-in rules
+    const hasCustomRules = userRules !== undefined || projectRules !== undefined;
+    if (hasCustomRules) {
+        const custom = [...(projectRules || []), ...(userRules || [])];
+        // If any custom rules exist, append built-ins; if custom is empty [], user opted out
+        config.routing_rules = custom.length > 0 ? [...custom, ...builtinRules] : custom;
     }
     return config;
 }
