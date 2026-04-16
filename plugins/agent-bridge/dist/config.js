@@ -1,8 +1,48 @@
 import { readFileSync, existsSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { resolve } from "node:path";
+// Built-in default config — works without any external config file
+const BUILTIN_DEFAULT = {
+    bridge: {
+        default_strategy: "best_fit",
+        cost_limit_usd_per_day: 5.0,
+        log_level: "info",
+    },
+    agents: {
+        codex: {
+            enabled: true,
+            auth_env: "OPENAI_API_KEY",
+            cli_binary: "codex",
+            strengths: ["security", "edge-cases", "deep-reasoning", "typescript"],
+            cost_per_1k: { input: 0.003, output: 0.012 },
+        },
+        opencode: {
+            enabled: true,
+            auth_env: "OPENROUTER_API_KEY",
+            cli_binary: "opencode",
+            strengths: ["multi-model", "python", "cost-efficient", "local-models"],
+        },
+        qoder: {
+            enabled: true,
+            auth_env: "QODER_API_KEY",
+            cli_binary: "qodercli",
+            model: "ultimate",
+            strengths: ["data-analysis", "sql", "business-logic"],
+        },
+    },
+    routing_rules: [
+        {
+            match: { task_type: "review", language: "python" },
+            route_to: "opencode",
+            reason: "OpenCode excels at Python",
+        },
+        {
+            match: { task_type: "review", focus: "sql" },
+            route_to: "qoder",
+            reason: "Qoder specializes in SQL",
+        },
+    ],
+    fallback_chain: ["codex", "opencode", "qoder"],
+};
 function deepMerge(target, source) {
     const result = { ...target };
     for (const key of Object.keys(source)) {
@@ -27,37 +67,19 @@ function loadJsonFile(path) {
     return JSON.parse(content);
 }
 export function loadConfig() {
-    // Plugin default config — __dirname is plugins/agent-bridge/scripts/ (or dist/)
-    // Project root is 3 levels up: scripts -> agent-bridge -> plugins -> root
-    const projectRoot = resolve(__dirname, "..", "..", "..");
-    const defaultConfigPath = resolve(projectRoot, "config", "default-config.json");
-    // User-level config
+    // Start with built-in defaults (always available, no file dependency)
+    let config = structuredClone(BUILTIN_DEFAULT);
+    // User-level config override: ~/.universal-agent-bridge/config.json
     const homeDir = process.env.HOME || process.env.USERPROFILE || "";
     const userConfigPath = resolve(homeDir, ".universal-agent-bridge", "config.json");
-    // Project-level config
-    const cwd = process.cwd();
-    const projectConfigPath = resolve(cwd, ".universal-agent-bridge", "config.json");
-    // Load and merge: default < user < project
-    let config = loadJsonFile(defaultConfigPath) || {};
     const userConfig = loadJsonFile(userConfigPath);
     if (userConfig)
         config = deepMerge(config, userConfig);
+    // Project-level config override: ./.universal-agent-bridge/config.json
+    const cwd = process.cwd();
+    const projectConfigPath = resolve(cwd, ".universal-agent-bridge", "config.json");
     const projectConfig = loadJsonFile(projectConfigPath);
     if (projectConfig)
         config = deepMerge(config, projectConfig);
-    // Ensure required fields exist
-    if (!config.bridge) {
-        config.bridge = {
-            default_strategy: "best_fit",
-            cost_limit_usd_per_day: 5.0,
-            log_level: "info",
-        };
-    }
-    if (!config.agents)
-        config.agents = {};
-    if (!config.routing_rules)
-        config.routing_rules = [];
-    if (!config.fallback_chain)
-        config.fallback_chain = ["codex", "opencode", "qoder"];
     return config;
 }

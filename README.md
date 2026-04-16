@@ -118,11 +118,13 @@ node plugins/agent-bridge/dist/bridge.js --task status
 
 ## 配置
 
-三层配置合并（优先级从高到低）：
+插件内置默认配置，安装后即可使用（零配置）。三个 Agent（Codex、OpenCode、QoderCLI）默认全部启用，路由器会自动跳过未安装的 Agent，只路由到健康可用的 Agent。
 
-1. `.universal-agent-bridge/config.json` — 项目级
-2. `~/.universal-agent-bridge/config.json` — 用户级
-3. `config/default-config.json` — 内置默认
+如需自定义配置（切换模型、禁用某个 Agent、调整路由规则等），可创建覆盖配置文件，优先级从高到低：
+
+1. `.universal-agent-bridge/config.json` — 项目级覆盖
+2. `~/.universal-agent-bridge/config.json` — 用户级覆盖
+3. 内置默认 — 代码中硬编码，始终可用
 
 ### 模型配置
 
@@ -248,7 +250,7 @@ plugins/agent-bridge/
 ├── scripts/                      # TypeScript 源码
 │   ├── bridge.ts                  # 主入口
 │   ├── router.ts                  # 智能路由引擎
-│   ├── config.ts                  # 三层 JSON 配置加载
+│   ├── config.ts                  # 内嵌默认 + 用户/项目级配置覆盖
 │   ├── state.ts                   # 任务状态持久化管理
 │   ├── stop-review-gate.ts        # Stop 审查门禁 Hook
 │   └── adapters/                  # 各 Agent 适配器
