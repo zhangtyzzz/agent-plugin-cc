@@ -16,10 +16,8 @@ Selection guidance:
 
 Forwarding rules:
 
-- Use exactly one `Bash` call to invoke `node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task rescue --code-file <prompt-file> [flags]`.
-- Write the user's task text to a temp file via `Bash` (e.g. `mktemp /tmp/uab-rescue-XXXXXX.txt`) and pass that path with `--code-file`.
-- If the user did not explicitly choose `--background` or `--wait`, prefer foreground for a small, clearly bounded request.
-- If the request looks complicated, open-ended, multi-step, or likely to keep the external agent running for a long time, prefer `--background`.
+- Use exactly one `Bash` invocation that (a) writes the user's task text to a temp file via `mktemp /tmp/uab-rescue-XXXXXX.txt`, (b) runs `node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task rescue --code-file "$TMPFILE" [flags]`, and (c) removes the temp file with `rm -f "$TMPFILE"` after the bridge returns. Chain the three steps in a single command (e.g. `TMPFILE=$(mktemp /tmp/uab-rescue-XXXXXX.txt) && cat > "$TMPFILE" <<'PROMPT_EOF' ... PROMPT_EOF; node ... ; rc=$?; rm -f "$TMPFILE"; exit $rc`) so cleanup runs even on failure.
+- Default to foreground. Only forward `--background` if the user explicitly supplied that flag in their request. Do not pick `--background` autonomously based on perceived task complexity — the bridge's background mode returns only a job-start message, which conflicts with the slash command contract that the agent's full output must be returned verbatim.
 - Treat `--agent <name>`, `--background`, `--wait` as routing controls and do not include them in the task text you pass through.
 - Only add `--agent <name>` when the user explicitly asks for a specific backend (codex, opencode, qoder). Otherwise let the bridge auto-route.
 - Preserve the user's task text as-is apart from stripping routing flags.
