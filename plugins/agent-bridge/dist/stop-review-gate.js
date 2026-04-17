@@ -1,7 +1,7 @@
 // plugins/agent-bridge/scripts/stop-review-gate.ts
 //
 // Standalone hook script for the Stop review gate.
-// Reads JSON from stdin, runs a review via bridge.js, emits BLOCK/ALLOW decision.
+// Reads JSON from stdin, runs a review via bridge.js, emits approve/block decision.
 import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
