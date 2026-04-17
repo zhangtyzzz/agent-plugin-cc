@@ -43,10 +43,10 @@ Scope-aware diff gathering:
 2. Write the diff to a unique temp file (use `mktemp` to avoid collisions with concurrent reviews)
 
 Foreground flow:
-1. Gather the code diff using scope rules above into a unique temp file (e.g., `TMPFILE=$(mktemp /tmp/uab-review-XXXXXX.txt)`)
+1. Gather the code diff using scope rules above into a unique temp file (e.g., `TMPFILE=$(mktemp /tmp/uab-review-XXXXXX)`)
 2. Run:
    ```bash
-   TMPFILE=$(mktemp /tmp/uab-review-XXXXXX.txt) && <diff-command> > "$TMPFILE" && node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task adversarial-review --code-file "$TMPFILE" $ARGUMENTS; rm -f "$TMPFILE"
+   TMPFILE=$(mktemp /tmp/uab-review-XXXXXX) && <diff-command> > "$TMPFILE" && node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task adversarial-review --code-file "$TMPFILE" $ARGUMENTS; rm -f "$TMPFILE"
    ```
 3. Return the command stdout verbatim.
 

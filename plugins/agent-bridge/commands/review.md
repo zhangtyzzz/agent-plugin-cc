@@ -49,10 +49,10 @@ Scope-aware diff gathering:
 2. Write the diff to a unique temp file: `/tmp/uab-review-input-$RANDOM.txt` (use `mktemp` or `$RANDOM` to avoid collisions with concurrent reviews)
 
 Foreground flow:
-1. Gather the code diff using scope rules above into a unique temp file (e.g., `TMPFILE=$(mktemp /tmp/uab-review-XXXXXX.txt)`)
+1. Gather the code diff using scope rules above into a unique temp file (e.g., `TMPFILE=$(mktemp /tmp/uab-review-XXXXXX)`)
 2. Run:
    ```bash
-   TMPFILE=$(mktemp /tmp/uab-review-XXXXXX.txt) && <diff-command> > "$TMPFILE" && node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task review --code-file "$TMPFILE" $ARGUMENTS; rm -f "$TMPFILE"
+   TMPFILE=$(mktemp /tmp/uab-review-XXXXXX) && <diff-command> > "$TMPFILE" && node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task review --code-file "$TMPFILE" $ARGUMENTS; rm -f "$TMPFILE"
    ```
 3. Return the command stdout verbatim, exactly as-is.
 4. Do not paraphrase, summarize, or add commentary before or after it.
@@ -61,7 +61,7 @@ Background flow:
 - Launch the review with `Bash` in the background:
   ```typescript
   Bash({
-    command: `TMPFILE=$(mktemp /tmp/uab-review-XXXXXX.txt) && <diff-command> > "$TMPFILE" && node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task review --code-file "$TMPFILE" $ARGUMENTS; rm -f "$TMPFILE"`,
+    command: `TMPFILE=$(mktemp /tmp/uab-review-XXXXXX) && <diff-command> > "$TMPFILE" && node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task review --code-file "$TMPFILE" $ARGUMENTS; rm -f "$TMPFILE"`,
     description: "Agent review",
     run_in_background: true
   })

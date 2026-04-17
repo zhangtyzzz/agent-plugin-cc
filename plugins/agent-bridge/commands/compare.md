@@ -2,7 +2,7 @@
 description: Run the same task on multiple agents and compare results
 argument-hint: '[--agents <list>] [--base <ref>]'
 disable-model-invocation: true
-allowed-tools: Bash(node:*), Bash(git:*), Read, Glob, Grep
+allowed-tools: Bash(node:*), Bash(git:*), Bash(mktemp:*), Bash(rm:*), Read, Glob, Grep
 ---
 
 Run the same code review on multiple agents in parallel, then present a unified comparison.
@@ -10,16 +10,16 @@ Run the same code review on multiple agents in parallel, then present a unified 
 Raw slash-command arguments:
 `$ARGUMENTS`
 
-Execution:
-1. Gather the code diff:
-   ```bash
-   git diff main > /tmp/uab-compare-input.txt
-   ```
-2. Run:
-   ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task compare --code-file /tmp/uab-compare-input.txt $ARGUMENTS
-   ```
-3. Return the output verbatim.
-4. Clean up: `rm -f /tmp/uab-compare-input.txt`
+Argument handling:
+- `--agents <list>`: Comma-separated agents to run (codex, opencode, qoder). If omitted, all enabled agents will be used.
+- `--base <ref>`: Diff base branch (default: `main`).
 
-If `--agents` is not specified, all enabled agents will be used.
+Execution (single Bash call — gather diff into a fresh mktemp file, run bridge, clean up):
+
+```bash
+TMPFILE=$(mktemp /tmp/uab-compare-XXXXXX) && git diff <base>...HEAD > "$TMPFILE" && node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task compare --code-file "$TMPFILE" $ARGUMENTS; rc=$?; rm -f "$TMPFILE"; exit $rc
+```
+
+Rules:
+- Use exactly one `Bash` invocation. Keep mktemp + git diff + bridge + rm chained so cleanup runs even on failure.
+- Return the command stdout verbatim. Do not paraphrase, summarize, or add commentary.
