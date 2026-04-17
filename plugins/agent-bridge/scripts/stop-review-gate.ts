@@ -114,8 +114,8 @@ function main(): void {
 
   if (!config.stopReviewGate) {
     logNote(runningNote);
-    // Emit explicit allow so hook protocol is unambiguous
-    emitDecision({ decision: "allow", reason: "Stop review gate is disabled" });
+    // Emit explicit approve so hook protocol is unambiguous
+    emitDecision({ decision: "approve", reason: "Stop review gate is disabled" });
     return;
   }
 
@@ -126,8 +126,8 @@ function main(): void {
     return;
   }
 
-  // Emit explicit allow for protocol clarity
-  emitDecision({ decision: "allow", reason: review.reason || "Stop-time review passed" });
+  // Emit explicit approve for protocol clarity
+  emitDecision({ decision: "approve", reason: review.reason || "Stop-time review passed" });
   logNote(runningNote);
 }
 
