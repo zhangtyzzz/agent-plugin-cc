@@ -59,22 +59,20 @@ describe("BaseAdapter", () => {
       assert.ok(prompt.includes("fn()"));
     });
 
-    it("builds rescue prompt with context", () => {
+    it("builds task prompt as raw passthrough", () => {
       const prompt = adapter.testBuildReviewPrompt({
-        type: "rescue",
-        code: "crash()",
-        context: "segfault on line 42",
+        type: "task",
+        code: "create a hello world app",
       });
-      assert.ok(prompt.includes("segfault on line 42"));
-      assert.ok(prompt.includes("crash()"));
+      assert.equal(prompt, "create a hello world app");
     });
 
-    it("rescue prompt uses fallback when context is empty", () => {
+    it("task prompt returns empty string when no code", () => {
       const prompt = adapter.testBuildReviewPrompt({
-        type: "rescue",
-        code: "crash()",
+        type: "task",
+        code: "",
       });
-      assert.ok(prompt.includes("See code below"));
+      assert.equal(prompt, "");
     });
 
     it("builds explain prompt", () => {
@@ -85,21 +83,12 @@ describe("BaseAdapter", () => {
       assert.ok(prompt.includes("Explain"));
     });
 
-    it("builds generate prompt from context", () => {
+    it("unknown type falls back to raw code", () => {
       const prompt = adapter.testBuildReviewPrompt({
-        type: "generate",
-        code: "",
-        context: "write a hello world",
+        type: "unknown",
+        code: "raw content",
       });
-      assert.equal(prompt, "write a hello world");
-    });
-
-    it("generate falls back to code when no context", () => {
-      const prompt = adapter.testBuildReviewPrompt({
-        type: "generate",
-        code: "template code",
-      });
-      assert.equal(prompt, "template code");
+      assert.equal(prompt, "raw content");
     });
 
     it("includes focus when specified", () => {

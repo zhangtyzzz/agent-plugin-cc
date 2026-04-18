@@ -87,11 +87,11 @@ describe("Router", () => {
     it("skips agents without matching capability", async () => {
       const adapters = new Map([
         ["reviewOnly", mockAdapter("reviewOnly", ["review"], ["security"])],
-        ["rescueOnly", mockAdapter("rescueOnly", ["rescue"], ["security"])],
+        ["taskOnly", mockAdapter("taskOnly", ["task"], ["security"])],
       ]);
       const router = new Router(adapters, [], ["reviewOnly"]);
-      const result = await router.select({ type: "rescue", code: "x" });
-      assert.equal(result.agent, "rescueOnly");
+      const result = await router.select({ type: "task", code: "x" });
+      assert.equal(result.agent, "taskOnly");
     });
   });
 
