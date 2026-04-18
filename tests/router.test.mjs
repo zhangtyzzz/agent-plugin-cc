@@ -77,11 +77,11 @@ describe("Router", () => {
     it("prefers free agent over paid when no other differentiator", async () => {
       const adapters = new Map([
         ["paid", mockAdapter("paid", ["review"], [], true, { input: 0.01, output: 0.03 })],
-        ["free", mockAdapter("free", ["review"], [], true, undefined)],
+        ["noCost", mockAdapter("noCost", ["review"], [], true, undefined)],
       ]);
       const router = new Router(adapters, [], []);
       const result = await router.select({ type: "review", code: "x" });
-      assert.equal(result.agent, "free");
+      assert.equal(result.agent, "noCost");
     });
 
     it("skips agents without matching capability", async () => {

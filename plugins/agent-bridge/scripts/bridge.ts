@@ -475,8 +475,8 @@ async function main() {
   }
 
   // Require code for tasks that need it
-  const needsCode = ["review", "adversarial-review", "task", "explain", "compare"];
-  if (needsCode.includes(task) && !code.trim()) {
+  const needsInput = ["review", "adversarial-review", "task", "explain", "compare"];
+  if (needsInput.includes(task) && !code.trim()) {
     if (reviewTasks.includes(task)) {
       console.error(`Error: no code to ${task}. Working tree is clean and branch diff against "${str("base") || "main"}" is empty. Provide --code-file or commit changes.`);
     } else {
