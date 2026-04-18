@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process";
 import { readFileSync, writeFileSync, unlinkSync, existsSync, mkdtempSync, rmdirSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 import { BaseAdapter, type AdapterConfig, type TaskInput, type TaskOutput, type HealthResult } from "./base.js";
 
@@ -18,7 +18,75 @@ export class OpenCodeAdapter extends BaseAdapter {
 
   constructor(cfg?: any) {
     super();
-    if (cfg?.model) this.modelName = cfg.model;
+    if (cfg?.model) {
+      this.modelName = cfg.model;
+    } else {
+      this.modelName = this.resolveOpenCodeModel();
+    }
+  }
+
+  /**
+   * Auto-detect the user's preferred opencode model from opencode's own config chain.
+   *
+   * Priority (matches opencode's documented loading order):
+   *   1. Project opencode.json / opencode.jsonc  →  "model" field
+   *   2. Global  ~/.config/opencode/opencode.json(c) →  "model" field
+   *   3. State   ~/.local/state/opencode/model.json →  recent[0]  (TUI selection)
+   *
+   * Returns undefined when nothing is found — opencode will pick its own default.
+   */
+  private resolveOpenCodeModel(): string | undefined {
+    // 1. Project-level opencode config
+    const cwd = process.cwd();
+    for (const name of ["opencode.json", "opencode.jsonc"]) {
+      const m = this.readModelFromConfig(join(cwd, name));
+      if (m) return m;
+    }
+
+    // 2. Global opencode config
+    const globalDir = process.env.XDG_CONFIG_HOME
+      ? join(process.env.XDG_CONFIG_HOME, "opencode")
+      : join(homedir(), ".config", "opencode");
+    for (const name of ["opencode.json", "opencode.jsonc"]) {
+      const m = this.readModelFromConfig(join(globalDir, name));
+      if (m) return m;
+    }
+
+    // 3. TUI state — recent model selection
+    const stateDir = process.env.XDG_STATE_HOME
+      ? join(process.env.XDG_STATE_HOME, "opencode")
+      : join(homedir(), ".local", "state", "opencode");
+    const modelJsonPath = join(stateDir, "model.json");
+    try {
+      const data = JSON.parse(readFileSync(modelJsonPath, "utf-8"));
+      if (Array.isArray(data.recent) && data.recent.length > 0) {
+        const { providerID, modelID } = data.recent[0];
+        if (typeof providerID === "string" && typeof modelID === "string") {
+          return `${providerID}/${modelID}`;
+        }
+      }
+    } catch {
+      // model.json missing or unreadable — no problem
+    }
+
+    return undefined;
+  }
+
+  /** Read the top-level "model" field from an opencode config file. */
+  private readModelFromConfig(filePath: string): string | undefined {
+    try {
+      if (!existsSync(filePath)) return undefined;
+      let text = readFileSync(filePath, "utf-8");
+      // Strip JSONC single-line comments for .jsonc files
+      if (filePath.endsWith(".jsonc")) {
+        text = text.replace(/\/\/.*$/gm, "");
+      }
+      const data = JSON.parse(text);
+      if (typeof data.model === "string" && data.model) return data.model;
+    } catch {
+      // parse error or IO error — skip
+    }
+    return undefined;
   }
 
   async healthCheck(): Promise<HealthResult> {
