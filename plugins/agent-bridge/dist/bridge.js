@@ -11,7 +11,7 @@
 //   node <path>/dist/bridge.js --task task-worker --job-id <id> --cwd <path>
 import { parseArgs } from "node:util";
 import { readFileSync, existsSync } from "node:fs";
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 // -- Import modules --
@@ -24,17 +24,19 @@ import { generateJobId, upsertJob, listJobs, readJobFile, writeJobFile, appendLo
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 // -- Parse command line args --
-const { values: rawArgs } = parseArgs({
+const { values: rawArgs, positionals: rawPositionals } = parseArgs({
     options: {
         task: { type: "string", short: "t" },
         agent: { type: "string", short: "a" },
         agents: { type: "string" },
         "code-file": { type: "string", short: "f" },
+        "prompt-file": { type: "string" },
         focus: { type: "string" },
         language: { type: "string", short: "l" },
         context: { type: "string", short: "c" },
         background: { type: "boolean", short: "b", default: false },
         base: { type: "string" },
+        scope: { type: "string" },
         "job-id": { type: "string" },
         cwd: { type: "string" },
         wait: { type: "boolean", default: false },
@@ -68,6 +70,29 @@ function createAdapterRegistry(config) {
     return registry;
 }
 // -- Background job helpers --
+function autoCollectGitDiff(cwd, scope, base) {
+    const run = (cmd) => {
+        try {
+            return execSync(cmd, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).toString();
+        }
+        catch {
+            return "";
+        }
+    };
+    const safeBase = base.replace(/[^a-zA-Z0-9._/-]/g, "");
+    if (scope === "working-tree") {
+        return run("git diff HEAD");
+    }
+    if (scope === "branch") {
+        return run(`git diff ${safeBase}...HEAD`);
+    }
+    // auto: prefer working tree if dirty, else branch diff
+    const dirty = run("git status --porcelain").trim();
+    if (dirty) {
+        return run("git diff HEAD") || run("git diff --cached") || dirty;
+    }
+    return run(`git diff ${safeBase}...HEAD`);
+}
 function spawnDetachedWorker(cwd, jobId) {
     const scriptPath = join(__dirname, "bridge.js");
     const child = spawn(process.execPath, [scriptPath, "--task", "task-worker", "--job-id", jobId, "--cwd", cwd], {
@@ -403,15 +428,30 @@ async function main() {
         console.error(`Error: unknown task "${task}". Valid tasks: ${validTasks.join(", ")}, health, list, status, result, cancel`);
         process.exit(1);
     }
+    // ---- Resolve code/prompt input ----
+    // Priority order: --code-file > --prompt-file > positional args > auto-collect (review tasks only)
     let code = "";
-    const codeFile = str("code-file");
+    const codeFile = str("code-file") || str("prompt-file");
     if (codeFile && existsSync(codeFile)) {
         code = readFileSync(codeFile, "utf-8");
     }
-    // Require code for tasks that need it (unless generate with context)
+    else if (rawPositionals && rawPositionals.length > 0) {
+        code = rawPositionals.join(" ");
+    }
+    const reviewTasks = ["review", "adversarial-review", "compare"];
+    if (!code.trim() && reviewTasks.includes(task)) {
+        // Auto-collect git diff based on --scope
+        code = autoCollectGitDiff(workingDir, str("scope") || "auto", str("base") || "main");
+    }
+    // Require code for tasks that need it
     const needsCode = ["review", "adversarial-review", "rescue", "explain", "compare"];
     if (needsCode.includes(task) && !code.trim()) {
-        console.error(`Error: --code-file is required for task "${task}" and must not be empty`);
+        if (reviewTasks.includes(task)) {
+            console.error(`Error: no code to ${task}. Working tree is clean and branch diff against "${str("base") || "main"}" is empty. Provide --code-file or commit changes.`);
+        }
+        else {
+            console.error(`Error: no prompt provided for task "${task}". Pass it as positional args, --prompt-file, or --code-file.`);
+        }
         process.exit(1);
     }
     const taskInput = {

@@ -9,31 +9,13 @@ Run:
 node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task health
 ```
 
-If `--enable-review-gate` is specified, create the auto-review hook in `.claude/settings.json`:
-```json
-{
-  "hooks": {
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/stop-review-gate.js\"",
-            "timeout": 900
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-Then enable the persistent state flag by running (from the project root, NOT from dist/):
+If `--enable-review-gate` is specified, enable the review gate by running (from the project root, NOT from dist/):
 ```bash
 node -e "import('${CLAUDE_PLUGIN_ROOT}/dist/state.js').then(m => m.setConfig(process.cwd(), 'stopReviewGate', true))" --input-type=module
 ```
+The Stop hook is already registered via the plugin's own `hooks/hooks.json` (auto-loaded by Claude Code), and uses `${CLAUDE_PLUGIN_ROOT}` so the path always points at the currently-installed plugin version. Do NOT add a hook entry to `.claude/settings.json` — that pins the path to a specific version and breaks on plugin upgrade. When `stopReviewGate` is true, the script runs the review; when false, it auto-approves.
 
-If `--disable-review-gate` is specified, remove the Stop hook entry from `.claude/settings.json` and disable the state flag:
+If `--disable-review-gate` is specified, disable the state flag:
 ```bash
 node -e "import('${CLAUDE_PLUGIN_ROOT}/dist/state.js').then(m => m.setConfig(process.cwd(), 'stopReviewGate', false))" --input-type=module
 ```
