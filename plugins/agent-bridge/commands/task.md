@@ -24,13 +24,13 @@ Execution mode:
 
 Foreground flow (one Bash call):
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task task $ARGUMENTS
+node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" $ARGUMENTS
 ```
 
 Background flow:
 ```typescript
 Bash({
-  command: `node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task task $ARGUMENTS`,
+  command: `node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" $ARGUMENTS`,
   description: "Agent task",
   run_in_background: true
 })

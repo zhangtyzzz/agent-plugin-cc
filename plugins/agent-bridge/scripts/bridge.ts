@@ -201,11 +201,7 @@ async function main() {
 
   const router = new Router(registry, routingRules, config.fallback_chain || []);
 
-  const task = str("task");
-  if (!task) {
-    console.error("Error: --task is required");
-    process.exit(1);
-  }
+  const task = str("task") || "task";
 
   const workingDir = str("cwd") || process.cwd();
 
