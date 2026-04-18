@@ -179,7 +179,15 @@ async function main() {
         reason: r.reason,
     }));
     const router = new Router(registry, routingRules, config.fallback_chain || []);
-    const task = str("task") || "task";
+    // Default to "task" only when the caller provided a prompt (positional args, --code-file, or --prompt-file)
+    // but omitted --task. This supports the /agent:task slash command which skips --task to avoid
+    // the confusing `--task task` pattern. Other commands still pass --task explicitly.
+    const hasPromptInput = (rawPositionals && rawPositionals.length > 0) || str("code-file") || str("prompt-file");
+    const task = str("task") || (hasPromptInput ? "task" : null);
+    if (!task) {
+        console.error("Error: --task is required");
+        process.exit(1);
+    }
     const workingDir = str("cwd") || process.cwd();
     // ---- health command ----
     if (task === "health") {
