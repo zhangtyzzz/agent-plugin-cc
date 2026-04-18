@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { readFileSync, writeFileSync, unlinkSync, existsSync, mkdtempSync, rmdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 import { BaseAdapter, type AdapterConfig, type TaskInput, type TaskOutput, type HealthResult } from "./base.js";
@@ -75,7 +75,6 @@ export class OpenCodeAdapter extends BaseAdapter {
   /** Read the top-level "model" field from an opencode config file. */
   private readModelFromConfig(filePath: string): string | undefined {
     try {
-      if (!existsSync(filePath)) return undefined;
       let text = readFileSync(filePath, "utf-8");
       // Strip JSONC single-line comments (but not // inside strings)
       if (filePath.endsWith(".jsonc")) {
@@ -86,7 +85,7 @@ export class OpenCodeAdapter extends BaseAdapter {
       const data = JSON.parse(text);
       if (typeof data.model === "string" && data.model) return data.model;
     } catch {
-      // parse error or IO error — skip
+      // ENOENT, parse error, or other IO error — skip
     }
     return undefined;
   }
@@ -124,8 +123,8 @@ export class OpenCodeAdapter extends BaseAdapter {
    * (SSE, LSP, file watcher) keep the event loop alive indefinitely.
    * See: https://github.com/anomalyco/opencode/issues/11891
    *
-   * Workaround: write prompt to temp file, run via shell with output
-   * redirected to a temp file, then read the result.
+   * Workaround: write prompt to temp file, pipe via stdin redirection
+   * (avoids shell expansion/injection), output redirected to a temp file.
    */
   private async runOpenCode(prompt: string, timeoutMs = 120_000): Promise<string> {
     const tmpDir = mkdtempSync(join(tmpdir(), "uab-oc-"));
@@ -140,13 +139,14 @@ export class OpenCodeAdapter extends BaseAdapter {
         shellEscape(this.config.cliBinary),
         "run", "--format", "json",
       ];
-      // Only specify model if explicitly configured; otherwise let opencode use its default
       if (this.modelName) {
         parts.push("--model", shellEscape(this.modelName));
       }
+      // Use stdin redirection to avoid shell expansion of prompt content.
+      // Redirect stderr to /dev/null to keep output clean.
       parts.push(
-        `"$(cat ${shellEscape(promptFile)})"`,
-        ">", shellEscape(outFile), "2>&1",
+        `< ${shellEscape(promptFile)}`,
+        ">", shellEscape(outFile), "2>/dev/null",
       );
       const cmd = parts.join(" ");
 
@@ -156,38 +156,37 @@ export class OpenCodeAdapter extends BaseAdapter {
         stdio: "ignore",
         killSignal: "SIGKILL",
       });
-    } catch (e: any) {
-      // execSync throws on timeout or non-zero exit
-      // But the output file may still have valid content
-      if (!existsSync(outFile)) {
-        throw new Error(`opencode failed: ${e.message}`);
-      }
-    } finally {
-      try { unlinkSync(promptFile); } catch {}
-    }
 
-    // Read output
-    try {
+      // Happy path — read output
       const content = readFileSync(outFile, "utf-8");
-      this.cleanupDir(tmpDir);
       if (!content.trim()) {
         throw new Error("opencode produced no output");
       }
       return content;
     } catch (e: any) {
-      this.cleanupDir(tmpDir);
-      throw new Error(`opencode output read failed: ${e.message}`);
+      // Check timeout first — most actionable error message
+      if (e.killed || e.signal === "SIGKILL") {
+        const partial = this.tryReadFile(outFile);
+        throw new Error(
+          `opencode timed out after ${timeoutMs}ms` +
+          (partial ? `\nPartial output:\n${partial.slice(0, 500)}` : ""),
+        );
+      }
+
+      // Non-zero exit but outFile may have valid content
+      if (existsSync(outFile)) {
+        const content = readFileSync(outFile, "utf-8");
+        if (content.trim()) return content;
+      }
+
+      throw new Error(`opencode failed: ${e.message}`);
+    } finally {
+      try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
     }
   }
 
-  private cleanupDir(dir: string): void {
-    try {
-      // Remove files inside, then dir
-      for (const f of ["prompt.txt", "out.json"]) {
-        try { unlinkSync(join(dir, f)); } catch {}
-      }
-      rmdirSync(dir);
-    } catch {}
+  private tryReadFile(path: string): string | undefined {
+    try { return readFileSync(path, "utf-8"); } catch { return undefined; }
   }
 
   /** Parse opencode JSON stream output — extract text parts */
