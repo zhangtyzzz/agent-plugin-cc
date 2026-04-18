@@ -36,7 +36,7 @@ brew install opencode                   # OpenCode
 |------|------|
 | `/agent:review` | 代码审查（自动路由或 `--agent codex` 指定） |
 | `/agent:adversarial-review` | 对抗性安全审查 |
-| `/agent:rescue` | 委派调试/修复任务给外部 Agent |
+| `/agent:task` | 委派任务给外部 Agent |
 | `/agent:explain` | 代码解释 |
 | `/agent:compare` | 多 Agent 并行对比 |
 | `/agent:list` | 列出可用 Agent |
@@ -245,7 +245,7 @@ Router 按以下顺序选择 Agent：
 plugins/agent-bridge/
 ├── .claude-plugin/plugin.json    # 插件清单
 ├── commands/                     # Slash 命令 (/agent:*)
-├── agents/                       # 子代理 (rescue, reviewer)
+├── agents/                       # 子代理 (task, reviewer)
 ├── hooks/                        # Hook 定义 (审查门禁)
 ├── scripts/                      # TypeScript 源码
 │   ├── bridge.ts                  # 主入口

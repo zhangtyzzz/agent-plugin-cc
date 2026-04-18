@@ -14,7 +14,7 @@ export interface AdapterConfig {
 }
 
 export interface TaskInput {
-  type: "review" | "adversarial-review" | "rescue" | "explain" | "generate" | "free";
+  type: "review" | "adversarial-review" | "task" | "explain";
   code: string;
   context?: string;
   focus?: string;
@@ -152,14 +152,11 @@ export abstract class BaseAdapter {
       case "adversarial-review":
         prompt = `${focus}${lang}Adversarial code review: actively try to break this code, find security vulnerabilities, race conditions, and edge cases:\n\n${task.code}`;
         break;
-      case "rescue":
-        prompt = `Investigate and fix this issue:\n\nContext: ${task.context || "See code below"}\n\n${task.code}`;
+      case "task":
+        prompt = task.code || "";
         break;
       case "explain":
         prompt = `${lang}Explain what this code does, step by step. Include the overall architecture, key decisions, and any potential issues:\n\n${task.code}`;
-        break;
-      case "generate":
-        prompt = `${lang}${task.context || task.code}`;
         break;
       default:
         prompt = task.code || "";

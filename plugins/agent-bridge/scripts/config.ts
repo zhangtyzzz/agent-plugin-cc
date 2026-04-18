@@ -69,9 +69,9 @@ const BUILTIN_DEFAULT: BridgeConfig = {
       reason: "Codex excels at security audits",
     },
     {
-      match: { task_type: "rescue" },
+      match: { task_type: "task" },
       route_to: "codex",
-      reason: "Codex excels at debugging and edge cases",
+      reason: "Codex excels at free-form task execution",
     },
     {
       match: { task_type: "review", language: "python" },

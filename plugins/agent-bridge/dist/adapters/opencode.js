@@ -9,7 +9,7 @@ export class OpenCodeAdapter extends BaseAdapter {
         displayName: "OpenCode",
         cliBinary: "opencode",
         authEnvVar: "OPENROUTER_API_KEY",
-        capabilities: ["review", "adversarial-review", "rescue", "generate", "explain"],
+        capabilities: ["review", "adversarial-review", "task", "explain"],
         strengths: ["multi-model", "python", "cost-efficient", "local-models"],
     };
     modelName;

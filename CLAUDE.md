@@ -15,7 +15,7 @@ No `git clone` or `npm install` required — Claude Code pulls the repo automati
 ## Slash Commands
 - `/agent:review` — Code review (auto-routes or `--agent codex`, supports `--scope auto|working-tree|branch`)
 - `/agent:adversarial-review` — Adversarial security review
-- `/agent:rescue` — Delegate debugging/fix to external agent
+- `/agent:task` — Delegate a task to an external agent
 - `/agent:explain` — Code explanation
 - `/agent:compare` — Multi-agent parallel comparison
 - `/agent:list` — List available agents
