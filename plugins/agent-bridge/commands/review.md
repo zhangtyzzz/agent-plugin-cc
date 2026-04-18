@@ -13,7 +13,7 @@ Raw slash-command arguments:
 Core constraint:
 - This command is review-only.
 - Do not fix issues, apply patches, or suggest that you are about to make changes.
-- Your only job is to run the review and return the output verbatim to the user.
+- Your only job is to run the review and return the bridge's output verbatim.
 
 Execution mode rules:
 - If the raw arguments include `--wait`, do not ask. Run the review in the foreground.
@@ -29,41 +29,27 @@ Execution mode rules:
   - `Run in background`
 
 Argument handling:
-- `--agent <name>`: Route to a specific agent (codex, opencode, qoder). If omitted, auto-route based on config.
-- `--base <ref>`: Diff base branch (default: main)
-- `--focus <area>`: Focus area (security, performance, logic, style)
-- `--scope auto|working-tree|branch`: What to review (default: auto)
-  - `auto`: If there are uncommitted changes, review the working tree diff. Otherwise, review the branch diff against base.
-  - `working-tree`: `git diff HEAD` (staged + unstaged changes only)
-  - `branch`: `git diff <base>...HEAD` (all commits on the branch)
-- Preserve the user's arguments exactly. Do not strip flags yourself.
+- All arguments are passed through to bridge.js as-is.
+- bridge.js parses `--agent <name>`, `--base <ref>`, `--focus <area>`, `--scope <mode>`, `--background` itself and auto-collects the git diff based on `--scope`.
+  - `auto` (default): working-tree if dirty, otherwise branch diff against `--base` (default `main`).
+  - `working-tree`: `git diff HEAD`.
+  - `branch`: `git diff <base>...HEAD`.
 
-Scope-aware diff gathering:
-1. Determine the scope (default: `auto`):
-   - If `--scope working-tree`: use `git diff HEAD` (combine staged + unstaged)
-   - If `--scope branch`: use `git diff <base>...HEAD` where base defaults to `main`
-   - If `--scope auto` or no `--scope`:
-     - Run `git diff --shortstat` and `git diff --shortstat --cached`
-     - If there are any uncommitted changes, use working-tree mode: `git diff HEAD`
-     - Otherwise, use branch mode: `git diff <base>...HEAD`
-2. Write the diff to a unique temp file: `/tmp/uab-review-input-$RANDOM.txt` (use `mktemp` or `$RANDOM` to avoid collisions with concurrent reviews)
-
-Foreground flow:
-1. Gather the code diff using scope rules above into a unique temp file (e.g., `TMPFILE=$(mktemp /tmp/uab-review-XXXXXX)`)
-2. Run:
-   ```bash
-   TMPFILE=$(mktemp /tmp/uab-review-XXXXXX) && <diff-command> > "$TMPFILE" && node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task review --code-file "$TMPFILE" $ARGUMENTS; rm -f "$TMPFILE"
-   ```
-3. Return the command stdout verbatim, exactly as-is.
-4. Do not paraphrase, summarize, or add commentary before or after it.
+Foreground flow (one Bash call):
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task review $ARGUMENTS
+```
 
 Background flow:
-- Launch the review with `Bash` in the background:
-  ```typescript
-  Bash({
-    command: `TMPFILE=$(mktemp /tmp/uab-review-XXXXXX) && <diff-command> > "$TMPFILE" && node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task review --code-file "$TMPFILE" $ARGUMENTS; rm -f "$TMPFILE"`,
-    description: "Agent review",
-    run_in_background: true
-  })
-  ```
-- After launching, tell the user: "Agent review started in the background."
+```typescript
+Bash({
+  command: `node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task review $ARGUMENTS`,
+  description: "Agent review",
+  run_in_background: true
+})
+```
+After launching, tell the user the review started in the background.
+
+Rules:
+- Use exactly one `Bash` invocation. Do not chain or wrap.
+- Return the bridge stdout verbatim. No paraphrasing, no summarizing.
