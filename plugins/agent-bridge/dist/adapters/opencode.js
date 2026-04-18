@@ -74,9 +74,9 @@ export class OpenCodeAdapter extends BaseAdapter {
             if (!existsSync(filePath))
                 return undefined;
             let text = readFileSync(filePath, "utf-8");
-            // Strip JSONC single-line comments for .jsonc files
+            // Strip JSONC single-line comments (but not // inside strings)
             if (filePath.endsWith(".jsonc")) {
-                text = text.replace(/\/\/.*$/gm, "");
+                text = text.replace(/"(?:[^"\\]|\\.)*"|\/\/.*$/gm, (m) => m.startsWith('"') ? m : "");
             }
             const data = JSON.parse(text);
             if (typeof data.model === "string" && data.model)
