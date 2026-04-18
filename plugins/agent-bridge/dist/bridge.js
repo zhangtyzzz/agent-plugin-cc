@@ -52,18 +52,30 @@ const str = (key) => {
     return typeof v === "string" ? v : undefined;
 };
 // Compat: LLM fork agents sometimes generate key=value positionals (e.g. `agent=codex`)
-// instead of --key value flags. Extract known keys and remove them from positionals.
-const knownKeys = ["task", "agent", "agents", "code-file", "prompt-file", "focus", "language", "context", "base", "scope", "job-id", "cwd"];
+// instead of --key value flags. Extract known keys from the LEADING positionals only —
+// stop at the first token that isn't a recognized key=value pair to avoid consuming
+// user prompt content like "fix task=management system".
+const knownStringKeys = ["task", "agent", "agents", "code-file", "prompt-file", "focus", "language", "context", "base", "scope", "job-id", "cwd"];
+const knownBoolKeys = ["background", "wait", "all"];
+let kvDone = false;
 const cleanPositionals = [];
 for (const arg of rawPositionals) {
-    const eqIdx = arg.indexOf("=");
-    if (eqIdx > 0) {
-        const key = arg.slice(0, eqIdx);
-        const val = arg.slice(eqIdx + 1);
-        if (knownKeys.includes(key) && val && !str(key)) {
-            rawArgs[key] = val;
-            continue;
+    if (!kvDone) {
+        const eqIdx = arg.indexOf("=");
+        if (eqIdx > 0) {
+            const key = arg.slice(0, eqIdx);
+            const val = arg.slice(eqIdx + 1);
+            if (val && knownStringKeys.includes(key) && !str(key)) {
+                rawArgs[key] = val;
+                continue;
+            }
+            if (knownBoolKeys.includes(key) && (val === "true" || val === "false")) {
+                rawArgs[key] = val === "true";
+                continue;
+            }
         }
+        // First non-key=value token: stop compat parsing, rest is prompt
+        kvDone = true;
     }
     cleanPositionals.push(arg);
 }
