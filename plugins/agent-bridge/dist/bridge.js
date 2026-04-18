@@ -69,12 +69,15 @@ for (const arg of rawPositionals) {
                 rawArgs[key] = val;
                 continue;
             }
-            if (knownBoolKeys.includes(key) && (val === "true" || val === "false")) {
+            if (knownBoolKeys.includes(key) && (val === "true" || val === "false") && rawArgs[key] === undefined) {
                 rawArgs[key] = val === "true";
                 continue;
             }
+            // Unrecognized or invalid key=value — stop compat, fall through to prompt
         }
-        // First non-key=value token: stop compat parsing, rest is prompt
+        else {
+            // No '=' at all — this is prompt text, stop compat parsing
+        }
         kvDone = true;
     }
     cleanPositionals.push(arg);
