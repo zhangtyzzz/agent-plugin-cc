@@ -205,7 +205,7 @@ async function main() {
   // Default to "task" only when the caller provided some input (prompt, file, or --agent)
   // but omitted --task. This supports the /agent:task slash command which skips --task to avoid
   // the confusing `--task task` pattern. Other commands still pass --task explicitly.
-  const hasInput = rawPositionals.length > 0 || str("code-file") || str("prompt-file") || str("agent");
+  const hasInput = rawPositionals.length > 0 || str("code-file") || str("prompt-file") || str("agent") || str("context");
   const task = str("task") || (hasInput ? "task" : null);
   if (!task) {
     console.error("Error: --task is required");
