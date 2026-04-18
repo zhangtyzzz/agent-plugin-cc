@@ -5,7 +5,7 @@ export class QoderAdapter extends BaseAdapter {
         displayName: "Qoder",
         cliBinary: "qodercli",
         authEnvVar: "QODER_API_KEY",
-        capabilities: ["review", "adversarial-review", "rescue", "generate", "explain"],
+        capabilities: ["review", "adversarial-review", "task", "explain"],
         strengths: ["data-analysis", "sql", "business-logic"],
     };
     modelLevel;

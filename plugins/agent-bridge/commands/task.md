@@ -1,6 +1,6 @@
 ---
-description: Delegate investigation or fix request to an external AI agent
-argument-hint: '[--background|--wait] [--agent <name>] [what to investigate or fix]'
+description: Delegate a task to an external AI agent
+argument-hint: '[--background|--wait] [--agent <name>] [task description]'
 context: fork
 allowed-tools: Bash(node:*), AskUserQuestion
 ---
@@ -24,18 +24,18 @@ Execution mode:
 
 Foreground flow (one Bash call):
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task rescue $ARGUMENTS
+node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task task $ARGUMENTS
 ```
 
 Background flow:
 ```typescript
 Bash({
-  command: `node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task rescue $ARGUMENTS`,
-  description: "Agent rescue",
+  command: `node "${CLAUDE_PLUGIN_ROOT}/dist/bridge.js" --task task $ARGUMENTS`,
+  description: "Agent task",
   run_in_background: true
 })
 ```
-After launching, tell the user the rescue started in the background and that they can check `/agent:status`.
+After launching, tell the user the task started in the background and that they can check `/agent:status`.
 
 Rules:
 - Use exactly one `Bash` invocation. Do not chain or wrap.

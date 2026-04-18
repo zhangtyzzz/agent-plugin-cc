@@ -452,7 +452,7 @@ async function main() {
   }
 
   // ---- Commands that need code ----
-  const validTasks = ["review", "adversarial-review", "rescue", "explain", "generate", "free", "compare"];
+  const validTasks = ["review", "adversarial-review", "task", "explain", "compare"];
   if (!validTasks.includes(task)) {
     console.error(`Error: unknown task "${task}". Valid tasks: ${validTasks.join(", ")}, health, list, status, result, cancel`);
     process.exit(1);
@@ -475,8 +475,8 @@ async function main() {
   }
 
   // Require code for tasks that need it
-  const needsCode = ["review", "adversarial-review", "rescue", "explain", "compare"];
-  if (needsCode.includes(task) && !code.trim()) {
+  const needsInput = ["review", "adversarial-review", "task", "explain", "compare"];
+  if (needsInput.includes(task) && !code.trim()) {
     if (reviewTasks.includes(task)) {
       console.error(`Error: no code to ${task}. Working tree is clean and branch diff against "${str("base") || "main"}" is empty. Provide --code-file or commit changes.`);
     } else {

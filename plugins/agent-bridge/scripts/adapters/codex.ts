@@ -6,7 +6,7 @@ export class CodexAdapter extends BaseAdapter {
     displayName: "OpenAI Codex",
     cliBinary: "codex",
     authEnvVar: "OPENAI_API_KEY",
-    capabilities: ["review", "adversarial-review", "rescue", "generate", "explain"],
+    capabilities: ["review", "adversarial-review", "task", "explain"],
     strengths: ["security", "edge-cases", "deep-reasoning", "typescript"],
     costPer1kTokens: { input: 0.003, output: 0.012 },
   };
