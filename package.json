@@ -1,6 +1,6 @@
 {
   "name": "universal-agent-bridge",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Universal multi-CLI agent bridge for Claude Code",
   "type": "module",
   "scripts": {

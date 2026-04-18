@@ -69,6 +69,25 @@ const str = (key: string): string | undefined => {
   return typeof v === "string" ? v : undefined;
 };
 
+// Compat: LLM fork agents sometimes generate key=value positionals (e.g. `agent=codex`)
+// instead of --key value flags. Extract known keys and remove them from positionals.
+const knownKeys = ["task", "agent", "agents", "code-file", "prompt-file", "focus", "language", "context", "base", "scope", "job-id", "cwd"];
+const cleanPositionals: string[] = [];
+for (const arg of rawPositionals) {
+  const eqIdx = arg.indexOf("=");
+  if (eqIdx > 0) {
+    const key = arg.slice(0, eqIdx);
+    const val = arg.slice(eqIdx + 1);
+    if (knownKeys.includes(key) && val && !str(key)) {
+      rawArgs[key] = val;
+      continue;
+    }
+  }
+  cleanPositionals.push(arg);
+}
+// Replace rawPositionals with cleaned version (remove consumed key=value pairs)
+const positionals = cleanPositionals;
+
 // -- Initialize Adapter Registry --
 function createAdapterRegistry(config: BridgeConfig): Map<string, BaseAdapter> {
   const registry = new Map<string, BaseAdapter>();
@@ -205,7 +224,7 @@ async function main() {
   // Default to "task" only when the caller provided some input (prompt, file, or --agent)
   // but omitted --task. This supports the /agent:task slash command which skips --task to avoid
   // the confusing `--task task` pattern. Other commands still pass --task explicitly.
-  const hasInput = rawPositionals.length > 0 || str("code-file") || str("prompt-file") || str("agent") || str("context");
+  const hasInput = positionals.length > 0 || str("code-file") || str("prompt-file") || str("agent") || str("context");
   const task = str("task") || (hasInput ? "task" : null);
   if (!task) {
     console.error("Error: --task is required");
@@ -469,8 +488,8 @@ async function main() {
   const codeFile = str("code-file") || str("prompt-file");
   if (codeFile && existsSync(codeFile)) {
     code = readFileSync(codeFile, "utf-8");
-  } else if (rawPositionals && rawPositionals.length > 0) {
-    code = rawPositionals.join(" ");
+  } else if (positionals.length > 0) {
+    code = positionals.join(" ");
   }
 
   const reviewTasks = ["review", "adversarial-review", "compare"];
