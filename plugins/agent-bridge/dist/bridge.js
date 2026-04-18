@@ -51,6 +51,39 @@ const str = (key) => {
     const v = rawArgs[key];
     return typeof v === "string" ? v : undefined;
 };
+// Compat: LLM fork agents sometimes generate key=value positionals (e.g. `agent=codex`)
+// instead of --key value flags. Extract known keys from the LEADING positionals only —
+// stop at the first token that isn't a recognized key=value pair to avoid consuming
+// user prompt content like "fix task=management system".
+const knownStringKeys = ["task", "agent", "agents", "code-file", "prompt-file", "focus", "language", "context", "base", "scope", "job-id", "cwd"];
+const knownBoolKeys = ["background", "wait", "all"];
+let kvDone = false;
+const cleanPositionals = [];
+for (const arg of rawPositionals) {
+    if (!kvDone) {
+        const eqIdx = arg.indexOf("=");
+        if (eqIdx > 0) {
+            const key = arg.slice(0, eqIdx);
+            const val = arg.slice(eqIdx + 1);
+            if (val && knownStringKeys.includes(key) && !str(key)) {
+                rawArgs[key] = val;
+                continue;
+            }
+            if (knownBoolKeys.includes(key) && (val === "true" || val === "false") && rawArgs[key] === undefined) {
+                rawArgs[key] = val === "true";
+                continue;
+            }
+            // Unrecognized or invalid key=value — stop compat, fall through to prompt
+        }
+        else {
+            // No '=' at all — this is prompt text, stop compat parsing
+        }
+        kvDone = true;
+    }
+    cleanPositionals.push(arg);
+}
+// Replace rawPositionals with cleaned version (remove consumed key=value pairs)
+const positionals = cleanPositionals;
 // -- Initialize Adapter Registry --
 function createAdapterRegistry(config) {
     const registry = new Map();
@@ -183,7 +216,7 @@ async function main() {
     // Default to "task" only when the caller provided some input (prompt, file, or --agent)
     // but omitted --task. This supports the /agent:task slash command which skips --task to avoid
     // the confusing `--task task` pattern. Other commands still pass --task explicitly.
-    const hasInput = rawPositionals.length > 0 || str("code-file") || str("prompt-file") || str("agent") || str("context");
+    const hasInput = positionals.length > 0 || str("code-file") || str("prompt-file") || str("agent") || str("context");
     const task = str("task") || (hasInput ? "task" : null);
     if (!task) {
         console.error("Error: --task is required");
@@ -440,8 +473,8 @@ async function main() {
     if (codeFile && existsSync(codeFile)) {
         code = readFileSync(codeFile, "utf-8");
     }
-    else if (rawPositionals && rawPositionals.length > 0) {
-        code = rawPositionals.join(" ");
+    else if (positionals.length > 0) {
+        code = positionals.join(" ");
     }
     const reviewTasks = ["review", "adversarial-review", "compare"];
     if (!code.trim() && reviewTasks.includes(task)) {
