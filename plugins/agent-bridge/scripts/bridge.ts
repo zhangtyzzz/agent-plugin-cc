@@ -5,7 +5,7 @@
 //   node <path>/dist/bridge.js --task review --agent codex --code-file /tmp/uab-input.txt
 //   node <path>/dist/bridge.js --task health
 //   node <path>/dist/bridge.js --task list
-//   node <path>/dist/bridge.js --task compare --agents codex,opencode --code-file /tmp/code.txt
+//   node <path>/dist/bridge.js --task review --agents codex,opencode --code-file /tmp/code.txt
 //   node <path>/dist/bridge.js --task status [--job-id <id>] [--wait]
 //   node <path>/dist/bridge.js --task result --job-id <id>
 //   node <path>/dist/bridge.js --task cancel --job-id <id>
@@ -103,7 +103,7 @@ for (const arg of rawPositionals) {
 const positionals = cleanPositionals;
 
 // -- Extract first positional as task type if it matches a known keyword --
-const KNOWN_TASK_TYPES = ["review", "adversarial-review", "explain", "compare"];
+const KNOWN_TASK_TYPES = ["review", "adversarial-review", "explain"];
 if (!str("task") && positionals.length > 0 && KNOWN_TASK_TYPES.includes(positionals[0].toLowerCase())) {
   rawArgs["task"] = positionals[0].toLowerCase();
   positionals.splice(0, 1);
@@ -497,7 +497,7 @@ async function main() {
   }
 
   // ---- Commands that need code ----
-  const validTasks = ["review", "adversarial-review", "task", "explain", "compare"];
+  const validTasks = ["review", "adversarial-review", "task", "explain"];
   if (!validTasks.includes(task)) {
     console.error(`Error: unknown task "${task}". Valid tasks: ${validTasks.join(", ")}, health, list, status, result, cancel`);
     process.exit(1);
@@ -513,14 +513,14 @@ async function main() {
     code = positionals.join(" ");
   }
 
-  const reviewTasks = ["review", "adversarial-review", "compare"];
+  const reviewTasks = ["review", "adversarial-review"];
   if (!code.trim() && reviewTasks.includes(task)) {
     // Auto-collect git diff based on --scope
     code = autoCollectGitDiff(workingDir, str("scope") || "auto", str("base") || "main");
   }
 
   // Require code for tasks that need it
-  const needsInput = ["review", "adversarial-review", "task", "explain", "compare"];
+  const needsInput = ["review", "adversarial-review", "task", "explain"];
   if (needsInput.includes(task) && !code.trim()) {
     if (reviewTasks.includes(task)) {
       console.error(`Error: no code to ${task}. Working tree is clean and branch diff against "${str("base") || "main"}" is empty. Provide --code-file or commit changes.`);
@@ -546,7 +546,7 @@ async function main() {
 
   if (specifiedAgent) {
     agentName = specifiedAgent;
-  } else if (task === "compare" || agentsArg) {
+  } else if (agentsArg) {
     // multi-agent mode handles its own agent selection below
     agentName = "";
   } else {
@@ -560,11 +560,6 @@ async function main() {
   // ---- Background execution ----
   if (rawArgs.background === true && agentsArg) {
     console.error("Warning: --background is not supported with --agents, running in foreground.");
-  }
-  // "compare" requires --agents; reject background mode early to avoid queuing an invalid job
-  if (rawArgs.background === true && task === "compare" && !agentsArg) {
-    console.error("Error: --agents is required for compare (e.g. --agents codex,opencode)");
-    process.exit(1);
   }
   if (rawArgs.background === true && !agentsArg) {
     const jobId = generateJobId("task");
@@ -617,10 +612,7 @@ async function main() {
       process.exit(1);
     }
 
-    // "compare" is not a real task type — it just means multi-agent. Use "review" as default.
-    const effectiveType = task === "compare" ? "review" : task;
-    const effectiveInput: TaskInput = { ...taskInput, type: effectiveType as TaskInput["type"] };
-    const label = effectiveType.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+    const label = task.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
 
     console.log(`## ${label}: ${agentNames.join(" vs ")}\n`);
 
@@ -630,7 +622,7 @@ async function main() {
         return { agent: name, result: `Error: agent "${name}" not found or not enabled`, latencyMs: 0 };
       }
       try {
-        return await adapter.execute(effectiveInput);
+        return await adapter.execute(taskInput);
       } catch (e: any) {
         return { agent: name, result: `Error: ${e.message}`, latencyMs: 0 };
       }
@@ -645,12 +637,6 @@ async function main() {
       console.log("\n---\n");
     }
     return;
-  }
-
-  // "compare" without --agents is an error
-  if (task === "compare") {
-    console.error("Error: --agents is required (e.g. --agents codex,opencode)");
-    process.exit(1);
   }
 
   // ---- Single agent foreground execution ----

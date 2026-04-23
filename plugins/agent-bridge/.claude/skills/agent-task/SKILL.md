@@ -1,17 +1,19 @@
 ---
 name: agent-task
-description: "Delegate tasks to external CLI coding agents (Codex, OpenCode, QoderCLI) via Universal Agent Bridge. Use when the user wants to send work to an external agent — code review, adversarial review, code explanation, or general task delegation. Supports multi-agent parallel execution with --agents for comparing results across agents. Trigger on: 'review my code with codex', 'use opencode to explain', 'delegate to agent', 'run review with codex and opencode', '/agent:task review', 'agent review', 'let codex handle this', 'compare agents', or any mention of external CLI agents reviewing, explaining, or working on code. Also trigger when user mentions codex, opencode, or qodercli by name."
+description: "Delegate tasks to external CLI coding agents (Codex, OpenCode, QoderCLI). You are a coordinator — proactively distribute work to specialized agents. TRIGGER when: you need a fresh code review, security analysis (adversarial-review), code explanation, want parallel perspectives from multiple agents (--agents), or the user mentions codex/opencode/qodercli by name. Examples: large changes → delegate review; security concern → adversarial-review; need diverse opinions → --agents codex,opencode. Do not wait for explicit requests — use your judgment to decide when delegation adds value."
 ---
 
 # Agent Task Bridge
 
 Route tasks to external CLI coding agents through bridge.js. This is a pure passthrough — bridge.js handles all logic internally including task type routing, agent selection, parallel execution, and background jobs.
 
+You are a **coordinator**, not just a passthrough. Use your judgment to decide when delegating to an external agent adds value: large code changes, security-sensitive areas, complex explanations, or when you want a second opinion. The external agents are your team — dispatch work to them when appropriate.
+
 ## Quick reference
 
 ```
 /agent:task review                                  # auto-routed code review
-/agent:task review --agents codex,opencode          # parallel review, multiple agents
+/agent:task review --agents codex,opencode          # parallel review from multiple agents
 /agent:task review --scope branch --agent codex     # branch diff, pinned agent
 /agent:task adversarial-review --background         # security review, async
 /agent:task explain src/main.ts                     # code explanation
