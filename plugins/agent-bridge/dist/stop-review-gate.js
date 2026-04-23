@@ -33,7 +33,7 @@ function logNote(message) {
 function parseStopReviewOutput(rawOutput) {
     const text = String(rawOutput ?? "").trim();
     if (!text) {
-        return { ok: false, reason: "The stop-time review returned no output. Run /agent:review --wait manually or bypass the gate." };
+        return { ok: false, reason: "The stop-time review returned no output. Run /agent:task review --wait manually or bypass the gate." };
     }
     // Search all lines for ALLOW:/BLOCK: since bridge.ts prepends headers
     const lines = text.split(/\r?\n/);
@@ -72,7 +72,7 @@ function runStopReview(cwd, input) {
             timeout: STOP_REVIEW_TIMEOUT_MS,
         });
         if (result.error?.code === "ETIMEDOUT") {
-            return { ok: false, reason: "The stop-time review timed out after 15 minutes. Run /agent:review --wait manually or bypass the gate." };
+            return { ok: false, reason: "The stop-time review timed out after 15 minutes. Run /agent:task review --wait manually or bypass the gate." };
         }
         if (result.status !== 0) {
             const detail = String(result.stderr || result.stdout || "").trim();

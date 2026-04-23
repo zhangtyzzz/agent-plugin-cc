@@ -102,6 +102,13 @@ for (const arg of rawPositionals) {
 // Replace rawPositionals with cleaned version (remove consumed key=value pairs)
 const positionals = cleanPositionals;
 
+// -- Extract first positional as task type if it matches a known keyword --
+const KNOWN_TASK_TYPES = ["review", "adversarial-review", "explain", "compare"];
+if (!str("task") && positionals.length > 0 && KNOWN_TASK_TYPES.includes(positionals[0])) {
+  rawArgs["task"] = positionals[0];
+  positionals.splice(0, 1);
+}
+
 // -- Initialize Adapter Registry --
 function createAdapterRegistry(config: BridgeConfig): Map<string, BaseAdapter> {
   const registry = new Map<string, BaseAdapter>();
@@ -538,8 +545,8 @@ async function main() {
 
   if (specifiedAgent) {
     agentName = specifiedAgent;
-  } else if (task === "compare") {
-    // compare handles its own agent selection below
+  } else if (task === "compare" || str("agents")) {
+    // multi-agent mode handles its own agent selection below
     agentName = "";
   } else {
     const routeResult = await router.select(taskInput);
@@ -550,10 +557,10 @@ async function main() {
   }
 
   // ---- Background execution ----
-  if (rawArgs.background === true && task === "compare") {
-    console.error("Warning: --background is not supported for compare, running in foreground.");
+  if (rawArgs.background === true && str("agents")) {
+    console.error("Warning: --background is not supported with --agents, running in foreground.");
   }
-  if (rawArgs.background === true && task !== "compare") {
+  if (rawArgs.background === true && !str("agents")) {
     const jobId = generateJobId("task");
     const logFile = resolveJobLogFile(workingDir, jobId);
     const summary = (code || str("context") || "").slice(0, 100);
@@ -596,16 +603,21 @@ async function main() {
     return;
   }
 
-  // ---- compare command ----
-  if (task === "compare") {
-    const agentsArg = str("agents") || "";
+  // ---- Multi-agent parallel execution (--agents on any task) ----
+  const agentsArg = str("agents");
+  if (agentsArg) {
     const agentNames = agentsArg.split(",").map((s: string) => s.trim()).filter(Boolean);
     if (agentNames.length < 2) {
       console.error("Error: --agents requires at least 2 comma-separated agent names");
       process.exit(1);
     }
 
-    console.log(`## Comparison: ${agentNames.join(" vs ")}\n`);
+    // "compare" is not a real task type — it just means multi-agent. Use "review" as default.
+    const effectiveType = task === "compare" ? "review" : task;
+    const effectiveInput: TaskInput = { ...taskInput, type: effectiveType as TaskInput["type"] };
+    const label = effectiveType.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+
+    console.log(`## ${label}: ${agentNames.join(" vs ")}\n`);
 
     const promises = agentNames.map(async (name: string) => {
       const adapter = registry.get(name);
@@ -613,7 +625,7 @@ async function main() {
         return { agent: name, result: `Error: agent "${name}" not found or not enabled`, latencyMs: 0 };
       }
       try {
-        return await adapter.execute({ ...taskInput, type: "review" });
+        return await adapter.execute(effectiveInput);
       } catch (e: any) {
         return { agent: name, result: `Error: ${e.message}`, latencyMs: 0 };
       }
@@ -622,12 +634,18 @@ async function main() {
     const outputs = await Promise.all(promises);
 
     for (const output of outputs) {
-      console.log(`### Review by ${output.agent}${output.model ? ` (${output.model})` : ""}`);
+      console.log(`### ${label} by ${output.agent}${output.model ? ` (${output.model})` : ""}`);
       console.log(`*Latency: ${output.latencyMs}ms${output.costEstimate ? ` | Est. cost: $${output.costEstimate}` : ""}*`);
       console.log(output.result);
       console.log("\n---\n");
     }
     return;
+  }
+
+  // "compare" without --agents is an error
+  if (task === "compare") {
+    console.error("Error: --agents is required (e.g. --agents codex,opencode)");
+    process.exit(1);
   }
 
   // ---- Single agent foreground execution ----
