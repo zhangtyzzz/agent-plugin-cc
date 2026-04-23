@@ -34,11 +34,7 @@ brew install opencode                   # OpenCode
 
 | 命令 | 说明 |
 |------|------|
-| `/agent:review` | 代码审查（自动路由或 `--agent codex` 指定） |
-| `/agent:adversarial-review` | 对抗性安全审查 |
-| `/agent:task` | 委派任务给外部 Agent |
-| `/agent:explain` | 代码解释 |
-| `/agent:compare` | 多 Agent 并行对比 |
+| `/agent:task` | 统一任务命令（见下方用法） |
 | `/agent:list` | 列出可用 Agent |
 | `/agent:health` | 健康检查 |
 | `/agent:setup` | 配置 + 启用/禁用自动审查门禁 |
@@ -46,13 +42,25 @@ brew install opencode                   # OpenCode
 | `/agent:result` | 查看已完成任务的输出 |
 | `/agent:cancel` | 取消正在运行的后台任务 |
 
+### `/agent:task` 用法
+
+第一个位置参数指定任务类型：
+
+```bash
+/agent:task review --scope branch --agent codex    # 代码审查
+/agent:task adversarial-review --background         # 对抗性安全审查
+/agent:task explain src/main.ts                     # 代码解释
+/agent:task review --agents codex,opencode          # 多 Agent 并行审查
+/agent:task fix the login bug                       # 通用任务委派
+```
+
 ## 后台任务
 
 支持将审查等耗时任务放到后台执行：
 
 ```bash
 # 提交后台审查任务
-/agent:review --background
+/agent:task review --background
 
 # 查看任务状态
 /agent:status
@@ -72,7 +80,7 @@ brew install opencode                   # OpenCode
 
 ## 审查范围（--scope）
 
-`/agent:review` 和 `/agent:adversarial-review` 支持 `--scope` 参数控制审查范围：
+`/agent:task review` 和 `/agent:task adversarial-review` 支持 `--scope` 参数控制审查范围：
 
 | Scope | 说明 |
 |-------|------|
@@ -81,8 +89,8 @@ brew install opencode                   # OpenCode
 | `branch` | 审查 `git diff <base>...HEAD`（分支所有提交） |
 
 ```bash
-/agent:review --scope working-tree --agent codex
-/agent:review --scope branch --base develop
+/agent:task review --scope working-tree --agent codex
+/agent:task review --scope branch --base develop
 ```
 
 ## 直接调用

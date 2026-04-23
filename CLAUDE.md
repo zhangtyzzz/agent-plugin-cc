@@ -13,11 +13,7 @@ In Claude Code, run:
 No `git clone` or `npm install` required — Claude Code pulls the repo automatically, and compiled JS is included.
 
 ## Slash Commands
-- `/agent:review` — Code review (auto-routes or `--agent codex`, supports `--scope auto|working-tree|branch`)
-- `/agent:adversarial-review` — Adversarial security review
-- `/agent:task` — Delegate a task to an external agent
-- `/agent:explain` — Code explanation
-- `/agent:compare` — Multi-agent parallel comparison
+- `/agent:task` — Unified task command (pure passthrough to bridge.js). First positional selects type: `review`, `adversarial-review`, `explain`, or general task. Add `--agents codex,opencode` for multi-agent parallel execution on any task type.
 - `/agent:list` — List available agents
 - `/agent:health` — Health check all agents
 - `/agent:setup` — Setup + enable/disable auto-review gate

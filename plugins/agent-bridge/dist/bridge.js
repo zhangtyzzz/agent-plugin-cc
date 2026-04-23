@@ -5,7 +5,7 @@
 //   node <path>/dist/bridge.js --task review --agent codex --code-file /tmp/uab-input.txt
 //   node <path>/dist/bridge.js --task health
 //   node <path>/dist/bridge.js --task list
-//   node <path>/dist/bridge.js --task compare --agents codex,opencode --code-file /tmp/code.txt
+//   node <path>/dist/bridge.js --task review --agents codex,opencode --code-file /tmp/code.txt
 //   node <path>/dist/bridge.js --task status [--job-id <id>] [--wait]
 //   node <path>/dist/bridge.js --task result --job-id <id>
 //   node <path>/dist/bridge.js --task cancel --job-id <id>
@@ -84,6 +84,12 @@ for (const arg of rawPositionals) {
 }
 // Replace rawPositionals with cleaned version (remove consumed key=value pairs)
 const positionals = cleanPositionals;
+// -- Extract first positional as task type if it matches a known keyword --
+const KNOWN_TASK_TYPES = ["review", "adversarial-review", "explain"];
+if (!str("task") && positionals.length > 0 && KNOWN_TASK_TYPES.includes(positionals[0].toLowerCase())) {
+    rawArgs["task"] = positionals[0].toLowerCase();
+    positionals.splice(0, 1);
+}
 // -- Initialize Adapter Registry --
 function createAdapterRegistry(config) {
     const registry = new Map();
@@ -217,7 +223,7 @@ async function main() {
     // but omitted --task. This supports the /agent:task slash command which skips --task to avoid
     // the confusing `--task task` pattern. Other commands still pass --task explicitly.
     const hasInput = positionals.length > 0 || str("code-file") || str("prompt-file") || str("agent") || str("context");
-    const task = str("task") || (hasInput ? "task" : null);
+    const task = (str("task") || (hasInput ? "task" : null))?.toLowerCase() ?? null;
     if (!task) {
         console.error("Error: --task is required");
         process.exit(1);
@@ -461,7 +467,7 @@ async function main() {
         return;
     }
     // ---- Commands that need code ----
-    const validTasks = ["review", "adversarial-review", "task", "explain", "compare"];
+    const validTasks = ["review", "adversarial-review", "task", "explain"];
     if (!validTasks.includes(task)) {
         console.error(`Error: unknown task "${task}". Valid tasks: ${validTasks.join(", ")}, health, list, status, result, cancel`);
         process.exit(1);
@@ -476,13 +482,13 @@ async function main() {
     else if (positionals.length > 0) {
         code = positionals.join(" ");
     }
-    const reviewTasks = ["review", "adversarial-review", "compare"];
+    const reviewTasks = ["review", "adversarial-review"];
     if (!code.trim() && reviewTasks.includes(task)) {
         // Auto-collect git diff based on --scope
         code = autoCollectGitDiff(workingDir, str("scope") || "auto", str("base") || "main");
     }
-    // Require code for tasks that need it
-    const needsInput = ["review", "adversarial-review", "task", "explain", "compare"];
+    // Require code for tasks that needs it
+    const needsInput = ["review", "adversarial-review", "task", "explain"];
     if (needsInput.includes(task) && !code.trim()) {
         if (reviewTasks.includes(task)) {
             console.error(`Error: no code to ${task}. Working tree is clean and branch diff against "${str("base") || "main"}" is empty. Provide --code-file or commit changes.`);
@@ -501,13 +507,14 @@ async function main() {
         background: rawArgs.background === true,
     };
     // ---- Resolve agent ----
+    const agentsArg = str("agents");
     let agentName;
     const specifiedAgent = str("agent");
     if (specifiedAgent) {
         agentName = specifiedAgent;
     }
-    else if (task === "compare") {
-        // compare handles its own agent selection below
+    else if (agentsArg) {
+        // multi-agent mode handles its own agent selection below
         agentName = "";
     }
     else {
@@ -518,10 +525,10 @@ async function main() {
         }
     }
     // ---- Background execution ----
-    if (rawArgs.background === true && task === "compare") {
-        console.error("Warning: --background is not supported for compare, running in foreground.");
+    if (rawArgs.background === true && agentsArg) {
+        console.error("Warning: --background is not supported with --agents, running in foreground.");
     }
-    if (rawArgs.background === true && task !== "compare") {
+    if (rawArgs.background === true && !agentsArg) {
         const jobId = generateJobId("task");
         const logFile = resolveJobLogFile(workingDir, jobId);
         const summary = (code || str("context") || "").slice(0, 100);
@@ -560,22 +567,22 @@ async function main() {
         console.log(`Use /agent:status --job-id ${jobId} to check progress.`);
         return;
     }
-    // ---- compare command ----
-    if (task === "compare") {
-        const agentsArg = str("agents") || "";
+    // ---- Multi-agent parallel execution (--agents on any task) ----
+    if (agentsArg) {
         const agentNames = agentsArg.split(",").map((s) => s.trim()).filter(Boolean);
         if (agentNames.length < 2) {
-            console.error("Error: --agents requires at least 2 comma-separated agent names");
+            console.error("Error: --agents requires at least 2 comma-separated agent names. Use --agent (singular) for a single agent.");
             process.exit(1);
         }
-        console.log(`## Comparison: ${agentNames.join(" vs ")}\n`);
+        const label = task.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+        console.log(`## ${label}: ${agentNames.join(" vs ")}\n`);
         const promises = agentNames.map(async (name) => {
             const adapter = registry.get(name);
             if (!adapter) {
                 return { agent: name, result: `Error: agent "${name}" not found or not enabled`, latencyMs: 0 };
             }
             try {
-                return await adapter.execute({ ...taskInput, type: "review" });
+                return await adapter.execute(taskInput);
             }
             catch (e) {
                 return { agent: name, result: `Error: ${e.message}`, latencyMs: 0 };
@@ -583,7 +590,7 @@ async function main() {
         });
         const outputs = await Promise.all(promises);
         for (const output of outputs) {
-            console.log(`### Review by ${output.agent}${output.model ? ` (${output.model})` : ""}`);
+            console.log(`### ${label} by ${output.agent}${output.model ? ` (${output.model})` : ""}`);
             console.log(`*Latency: ${output.latencyMs}ms${output.costEstimate ? ` | Est. cost: $${output.costEstimate}` : ""}*`);
             console.log(output.result);
             console.log("\n---\n");
