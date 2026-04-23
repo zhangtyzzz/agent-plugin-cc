@@ -1,7 +1,7 @@
 {
   "name": "agent-bridge",
   "description": "Universal multi-agent bridge with intelligent routing",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "author": {
     "name": "tianyi"
   }
