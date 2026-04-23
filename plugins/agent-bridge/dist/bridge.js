@@ -223,7 +223,7 @@ async function main() {
     // but omitted --task. This supports the /agent:task slash command which skips --task to avoid
     // the confusing `--task task` pattern. Other commands still pass --task explicitly.
     const hasInput = positionals.length > 0 || str("code-file") || str("prompt-file") || str("agent") || str("context");
-    const task = str("task") || (hasInput ? "task" : null);
+    const task = (str("task") || (hasInput ? "task" : null))?.toLowerCase() ?? null;
     if (!task) {
         console.error("Error: --task is required");
         process.exit(1);
@@ -527,6 +527,11 @@ async function main() {
     // ---- Background execution ----
     if (rawArgs.background === true && agentsArg) {
         console.error("Warning: --background is not supported with --agents, running in foreground.");
+    }
+    // "compare" requires --agents; reject background mode early to avoid queuing an invalid job
+    if (rawArgs.background === true && task === "compare" && !agentsArg) {
+        console.error("Error: --agents is required for compare (e.g. --agents codex,opencode)");
+        process.exit(1);
     }
     if (rawArgs.background === true && !agentsArg) {
         const jobId = generateJobId("task");
