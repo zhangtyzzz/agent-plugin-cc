@@ -1,6 +1,7 @@
 ---
 name: agent-task
 description: "Delegate tasks to external CLI coding agents (Codex, OpenCode, QoderCLI). You are a coordinator — proactively distribute work to specialized agents. TRIGGER when: you need a fresh code review, security analysis (adversarial-review), code explanation, want parallel perspectives from multiple agents (--agents), or the user mentions codex/opencode/qodercli by name. Examples: large changes → delegate review; security concern → adversarial-review; need diverse opinions → --agents codex,opencode. Do not wait for explicit requests — use your judgment to decide when delegation adds value."
+argument-hint: "[review|adversarial-review|explain|<task>] [--agent <name>] [--agents <a,b>] [--background] [--scope auto|working-tree|branch]"
 ---
 
 # Agent Task Bridge
