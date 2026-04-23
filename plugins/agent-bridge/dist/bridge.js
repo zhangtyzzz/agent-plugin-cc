@@ -86,8 +86,8 @@ for (const arg of rawPositionals) {
 const positionals = cleanPositionals;
 // -- Extract first positional as task type if it matches a known keyword --
 const KNOWN_TASK_TYPES = ["review", "adversarial-review", "explain", "compare"];
-if (!str("task") && positionals.length > 0 && KNOWN_TASK_TYPES.includes(positionals[0])) {
-    rawArgs["task"] = positionals[0];
+if (!str("task") && positionals.length > 0 && KNOWN_TASK_TYPES.includes(positionals[0].toLowerCase())) {
+    rawArgs["task"] = positionals[0].toLowerCase();
     positionals.splice(0, 1);
 }
 // -- Initialize Adapter Registry --
@@ -507,12 +507,13 @@ async function main() {
         background: rawArgs.background === true,
     };
     // ---- Resolve agent ----
+    const agentsArg = str("agents");
     let agentName;
     const specifiedAgent = str("agent");
     if (specifiedAgent) {
         agentName = specifiedAgent;
     }
-    else if (task === "compare" || str("agents")) {
+    else if (task === "compare" || agentsArg) {
         // multi-agent mode handles its own agent selection below
         agentName = "";
     }
@@ -524,10 +525,10 @@ async function main() {
         }
     }
     // ---- Background execution ----
-    if (rawArgs.background === true && str("agents")) {
+    if (rawArgs.background === true && agentsArg) {
         console.error("Warning: --background is not supported with --agents, running in foreground.");
     }
-    if (rawArgs.background === true && !str("agents")) {
+    if (rawArgs.background === true && !agentsArg) {
         const jobId = generateJobId("task");
         const logFile = resolveJobLogFile(workingDir, jobId);
         const summary = (code || str("context") || "").slice(0, 100);
@@ -567,11 +568,10 @@ async function main() {
         return;
     }
     // ---- Multi-agent parallel execution (--agents on any task) ----
-    const agentsArg = str("agents");
     if (agentsArg) {
         const agentNames = agentsArg.split(",").map((s) => s.trim()).filter(Boolean);
         if (agentNames.length < 2) {
-            console.error("Error: --agents requires at least 2 comma-separated agent names");
+            console.error("Error: --agents requires at least 2 comma-separated agent names. Use --agent (singular) for a single agent.");
             process.exit(1);
         }
         // "compare" is not a real task type — it just means multi-agent. Use "review" as default.
