@@ -13,12 +13,15 @@ You are a **coordinator**, not just a passthrough. Use your judgment to decide w
 
 ```
 /agent:task review                                  # auto-routed code review
+/agent:task review --background                     # run in background
 /agent:task review --agents codex,opencode          # parallel review from multiple agents
 /agent:task review --scope branch --agent codex     # branch diff, pinned agent
 /agent:task adversarial-review --background         # security review, async
 /agent:task explain src/main.ts                     # code explanation
 /agent:task fix the login bug --agent codex         # general task delegation
 ```
+
+**Tip**: For long-running tasks (large diffs, complex reviews), use `--background`. Check results later with `/agent:status` and `/agent:result`.
 
 ## Arguments
 
